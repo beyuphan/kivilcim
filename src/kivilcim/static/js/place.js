@@ -1,7 +1,7 @@
 // One place: what the satellites saw within a radius of it, the weather there, and what it means.
 
 import { api } from "./api.js";
-import { el, clear, icon, fmt, agoFrom, levelPill, FACTORS, CONFIDENCE, satellite, COMPASS, announce } from "./ui.js";
+import { el, clear, icon, fmt, agoFrom, ago, levelPill, FACTORS, CONFIDENCE, satellite, COMPASS, announce } from "./ui.js";
 import { flyTo, getCanvas, levelColor } from "./map.js";
 import { loadIndex, nearestName } from "./search.js";
 import * as saved from "./saved.js";
@@ -30,8 +30,9 @@ export function mount(ctx, params) {
   const detail = el("div", { class: "card" });
   const threat = el("div", { class: "card card-pad threat", hidden: true });
   const nearby = el("div", { class: "card", hidden: true });
+  const scanBox = el("div", { hidden: true });
   const actions = el("div", { class: "actions" });
-  body.append(back(), el("div", { class: "section-title" }, title), verdict, threat, actions, nearby, weatherBox, detail);
+  body.append(back(), el("div", { class: "section-title" }, title), verdict, threat, scanBox, actions, nearby, weatherBox, detail);
   renderActions();
   ctx.setTitle(name || "Seçilen konum");
 
@@ -46,8 +47,9 @@ export function mount(ctx, params) {
     if (name) { title.textContent = name; ctx.setTitle(name); renderActions(); }
   }).catch(() => {});
 
-  Promise.all([api.fires(lat, lon, radius, HOURS, signal), api.weather(lat, lon, signal)]).then(([fires, weather]) => {
-    renderVerdict(fires);
+  Promise.all([api.fires(lat, lon, radius, HOURS, signal), api.weather(lat, lon, signal), api.passes(lat, lon, signal)]).then(([fires, weather, scans]) => {
+    renderVerdict(fires, scans);
+    renderScans(scans, fires);
     renderThreat(fires, weather);
     renderWeather(weather, fires);
     renderDetail(fires);
@@ -131,7 +133,29 @@ export function mount(ctx, params) {
 
   let verdictCount = 0;
 
-  function renderVerdict(fires) {
+  // When a satellite last scanned this place, and when the next scan is. This is what gives "no
+  // detection" a meaning: a place nobody looked at has nothing to report.
+  function renderScans(scans, fires) {
+    if (!scans || !scans.available) return;
+    const box = el("div", { class: "card card-pad" });
+    const last = scans.last;
+    const next = scans.next;
+    const lag = fires.data_as_of.latest_observation_at ? agoFrom(fires.data_as_of.latest_observation_at) : null;
+    box.append(
+      el("div", { class: "section-title" }, el("h3", { class: "card-title" }, "Uydu takvimi")),
+      el("div", { class: "stats", style: { marginTop: "12px" } },
+        stat(fmt.num(scans.scans_24h), "tarama, son 24 saat"),
+        stat(last ? ago(last.minutes).replace(" önce", "") : "-", last ? `önce, ${last.satellite}` : "son tarama"),
+        stat(next ? ago(next.minutes).replace(" önce", "") : "-", next ? `sonra, ${next.satellite}` : "sıradaki tarama")),
+      el("p", { class: "card-sub", style: { marginTop: "12px" } },
+        scans.longest_gap_hours ? `Bu yerde iki tarama arasındaki en uzun boşluk yaklaşık ${fmt.dec(scans.longest_gap_hours)} saat: o sürede çıkan yangını hiçbir uydu görmez. ` : "",
+        "Tarama anıyla verinin bu siteye gelişi arasında yaklaşık 3 saat vardır, yani son 3 saatte olanları henüz bilmiyoruz.",
+        lag ? ` Elimizdeki en yeni gözlem ${lag}.` : ""),
+      el("p", { class: "legend-note", style: { marginTop: "8px" } }, scans.reliable ? "Genel yörünge verisinden tahmin edilir (CelesTrak); şerit kenarlarında küçük yangınlar yine kaçabilir." : "Yörünge verisi eski olduğu için bu tahmin güvenilir olmayabilir."));
+    scanBox.replaceWith(box);
+  }
+
+  function renderVerdict(fires, scans) {
     verdictCount = fires.count;
     clear(verdict);
     const n = fires.count;
@@ -139,7 +163,9 @@ export function mount(ctx, params) {
     if (!n) {
       verdict.append(
         el("p", { class: "card-title" }, `Son ${HOURS} saatte ${radius} km içinde uydu tespiti yok.`),
-        el("p", { class: "card-sub", style: { marginTop: "6px" } }, `Bu, yangın olmadığı anlamına gelmez: uydular günde birkaç kez geçer ve küçük ya da kısa ateşleri kaçırabilir. Son veri ${agoFrom(fires.data_as_of.latest_observation_at)}.`));
+        el("p", { class: "card-sub", style: { marginTop: "6px" } }, scans?.available && scans.last
+          ? `Uydular bu yeri son 24 saatte ${fmt.num(scans.scans_24h)} kez taradı (en son ${ago(scans.last.minutes)}, ${scans.last.satellite}); bu sürede çıkan büyük bir yangının görünmesi beklenirdi. Yine de küçük ya da kısa süreli ateşler ve son birkaç saatte olanlar görünmeyebilir.`
+          : `Bu, yangın olmadığı anlamına gelmez: uydular günde birkaç kez geçer ve küçük ya da kısa ateşleri kaçırabilir. Son veri ${agoFrom(fires.data_as_of.latest_observation_at)}.`));
       announce("Yakında uydu tespiti yok.");
     } else {
       verdict.append(
@@ -204,3 +230,5 @@ export function mount(ctx, params) {
 }
 
 const metric = (name, value, label) => el("div", { class: "metric" }, icon(name, 22), el("div", {}, el("b", {}, value), el("span", {}, label)));
+
+const stat = (value, label) => el("div", { class: "stat" }, el("b", {}, value), el("span", {}, label));

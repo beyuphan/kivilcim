@@ -73,6 +73,18 @@ class WeatherSnapshot(Base):
     precip_recent: Mapped[float] = mapped_column(Float)  # mm over the last 72 h
 
 
+class OrbitElements(Base):
+    """The latest two-line orbit elements of a fire-detecting satellite, from CelesTrak."""
+
+    __tablename__ = "orbit_elements"
+
+    norad: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(64))
+    line1: Mapped[str] = mapped_column(String(80))
+    line2: Mapped[str] = mapped_column(String(80))
+    fetched_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
 class EventImagery(Base):
     """The before and after satellite images chosen for an event, kept so the search is done once."""
 

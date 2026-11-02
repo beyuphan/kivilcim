@@ -30,6 +30,14 @@ from kivilcim.fixed import cell_of, find_fixed_cells
 from kivilcim.geo import bounding_box, haversine_km
 from kivilcim.imagery import find_before_after
 from kivilcim.models import EventImagery, FireDetection, IngestRun, WeatherSnapshot
+from kivilcim.passes import (
+    MAX_ELEMENTS_AGE_DAYS,
+    coverage_summary,
+    elements_age,
+    find_passes,
+    load_elements,
+    refresh_elements,
+)
 from kivilcim.ratelimit import RateLimitMiddleware
 from kivilcim.risk import compute_risk
 from kivilcim.scheduler import IngestScheduler, make_ingest_job
@@ -244,6 +252,24 @@ class EventImageryResponse(BaseModel):
     attribution: str
     note: str
     disclaimer: str
+
+
+class ScanOut(BaseModel):
+    satellite: str
+    instrument: str
+    at: datetime
+    minutes: float  # minutes ago for the last scan, minutes from now for the next
+
+
+class CoverageResponse(BaseModel):
+    available: bool  # false when no orbit data could be fetched yet
+    reliable: bool  # false when the orbit data is more than two weeks old
+    scans_24h: int  # how many times a satellite scanned the place in the last 24 hours
+    last: ScanOut | None
+    next: ScanOut | None
+    longest_gap_hours: float | None  # the longest stretch with no scan in the window (-24 to +24 h)
+    orbit_data_age_days: float | None
+    note: str
 
 
 class FireSuggestion(BaseModel):
@@ -950,6 +976,64 @@ def create_app(
         payload = imagery_for(session, event.id, event.center_lat, event.center_lon, event.start, event.end)
         return imagery_response(event_id, payload, response)
 
+    coverage_cache: dict = {}
+    coverage_lock = threading.Lock()
+
+    @app.get("/passes", response_model=CoverageResponse)
+    def passes(
+        response: Response,
+        lat: float = Query(ge=TURKEY_MIN_LAT, le=TURKEY_MAX_LAT),
+        lon: float = Query(ge=TURKEY_MIN_LON, le=TURKEY_MAX_LON),
+        session: Session = Depends(get_session),
+    ) -> CoverageResponse:
+        """When the fire-detecting satellites last scanned a place and when they will next. Without it
+        "no detection" says nothing: a satellite may not have passed at all. Predicted from public orbit
+        data; a scan is when the place lay inside the satellite's swath."""
+        current = clock()
+        with coverage_lock:
+            rows = load_elements(session)
+            if len(rows) < 5:
+                refresh_elements(session, weather_client, current)
+                rows = load_elements(session)
+        response.headers["Cache-Control"] = "public, max-age=300"
+        note = (
+            "Predicted from public orbit data. A scan is when the place was inside the satellite's swath; "
+            "small fires and the edges of a swath can still be missed, and the data reaches this site about "
+            "three hours after a scan."
+        )
+        if not rows:
+            return CoverageResponse(
+                available=False, reliable=False, scans_24h=0, last=None, next=None, longest_gap_hours=None,
+                orbit_data_age_days=None, note=note,
+            )
+        key = (round(lat, 1), round(lon, 1), int(current.timestamp() // 300))
+        found = coverage_cache.get(key)
+        if found is None:
+            found = find_passes(rows, lat, lon, current - timedelta(hours=24), current + timedelta(hours=24))
+            coverage_cache.clear()  # one five-minute slot at a time is enough
+            coverage_cache[key] = found
+        summary = coverage_summary(found, current)
+        age = elements_age(rows, current)
+
+        def scan(p) -> ScanOut | None:
+            if p is None:
+                return None
+            return ScanOut(
+                satellite=p.satellite, instrument=p.instrument, at=p.closest,
+                minutes=abs((p.closest - current).total_seconds()) / 60,
+            )
+
+        return CoverageResponse(
+            available=True,
+            reliable=age is not None and age < timedelta(days=MAX_ELEMENTS_AGE_DAYS),
+            scans_24h=sum(1 for p in found if p.closest <= current),
+            last=scan(summary["last"]),
+            next=scan(summary["next"]),
+            longest_gap_hours=round(summary["longest_gap_minutes"] / 60, 1) if summary["longest_gap_minutes"] else None,
+            orbit_data_age_days=round(age.total_seconds() / 86400, 1) if age else None,
+            note=note,
+        )
+
     @app.get("/imagery/place", response_model=EventImageryResponse)
     def place_imagery(
         response: Response,
@@ -1023,6 +1107,11 @@ def create_app(
 
     def after_ingest() -> None:
         warm_weather()
+        try:
+            with session_factory() as session:
+                refresh_elements(session, weather_client, clock())
+        except Exception:
+            log.exception("could not refresh the satellite orbit data")
         threading.Thread(target=warm_imagery, name="warm-imagery", daemon=True).start()
 
     app.state.warm_imagery = warm_imagery

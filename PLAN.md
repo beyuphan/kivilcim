@@ -3,7 +3,7 @@
 > Bu dosya iki dilli: önce İngilizce, sonra Türkçe. Her iki bölüm de aynı içeriği taşır; değişiklikler ikisinde birlikte yapılır.
 > This file is bilingual: English first, then Turkish. Both sections carry the same content; changes are made in both together.
 >
-> Durum / Status: sürüm / version 0.4.0 (the plan below describes what was built and why, then what is left).
+> Durum / Status: sürüm / version 0.5.0 (the plan below describes what was built and why, then what is left).
 
 ---
 

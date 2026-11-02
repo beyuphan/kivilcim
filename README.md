@@ -22,6 +22,10 @@ wooded land** and want a plain answer in Turkish, and for **people who need to s
 - **"Is there a fire near me?"** Search a district or use your location: the detections within a radius,
   how old they are, and how old the data itself is. The answer says what it cannot know (a satellite passes a
   few times a day, small fires are missed).
+- **"Did a satellite even look?"** "No detection" only means something if a satellite scanned the place. Every
+  place shows how many times the five fire satellites scanned it in the last 24 hours, when the last and the
+  next scan are, and the longest gap with none. Predicted from public orbit data and checked against real
+  detections (99 % of 600 detections fell inside the modeled swath).
 - **"Is it coming toward me?"** When a fire is near a place, the page compares the wind (direction and
   speed, from Open-Meteo) with where the nearest detection is: wind blowing from the fire toward you, across,
   or away. It draws the line to the fire and lists the district centers around it with the same wind check.

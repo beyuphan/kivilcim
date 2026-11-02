@@ -42,7 +42,7 @@ const SHELL = [
 ];
 
 // Paths that must always hit the network.
-const LIVE = ["/fires", "/risk", "/weather", "/status", "/events", "/health", "/docs", "/openapi.json"];
+const LIVE = ["/fires", "/risk", "/weather", "/status", "/events", "/passes", "/imagery", "/health", "/docs", "/openapi.json"];
 
 // Only this site's own files are kept. Map and satellite tiles are never cached here.
 

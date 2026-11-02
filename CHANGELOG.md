@@ -3,6 +3,19 @@
 All notable changes. The format follows [Keep a Changelog](https://keepachangelog.com/) and the
 project uses [semantic versioning](https://semver.org/).
 
+## [0.5.0] - 2026-11-03
+
+### Added
+- **Satellite schedule.** `GET /passes?lat&lon` and a "Uydu takvimi" card on every place: how many times
+  Suomi NPP, NOAA-20, NOAA-21, Terra and Aqua scanned the place in the last 24 hours, the last and next scan
+  and the longest gap with none, predicted with SGP4 from CelesTrak orbit data (kept in the database,
+  refreshed twice a day, marked unreliable when more than two weeks old). "No detection" now says whether a
+  satellite actually looked. The swath half widths were checked against 600 real detections
+  (`scripts/check_passes.py`); the method is on the methodology page.
+
+### Fixed
+- The service worker no longer stores the answers of `/imagery/*` and `/passes`.
+
 ## [0.4.0] - 2026-11-03
 
 ### Added
