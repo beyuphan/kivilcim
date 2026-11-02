@@ -48,6 +48,15 @@ export const api = {
       return null;
     }
   },
+  /** Whether the Telegram bot is set up, and its username. Never fails: no bot means no button. */
+  async bot(signal) {
+    try {
+      return await getJSON("/alerts/bot", { signal, ttl: 600_000 });
+    } catch (error) {
+      if (error.name === "AbortError") throw error;
+      return { enabled: false, username: null };
+    }
+  },
   /** The dates of the latest strong fire near a place, if any. */
   suggest: (lat, lon, signal) => getJSON(`/imagery/suggest?${q({ lat: lat.toFixed(3), lon: lon.toFixed(3) })}`, { signal, ttl: 120_000 }),
   /** Satellite images from before and after a fire at any place. */

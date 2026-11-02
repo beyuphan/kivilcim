@@ -131,6 +131,11 @@ hava servisine ~11 km'ye yuvarlanmış olarak iletilir. "Yerim yandı mı?" içi
 <code>python -m kivilcim</code> varsayılan olarak istek günlüğü tutmaz (<code>--access-log</code> ile açılır). Bir ters vekil sunucunun ya da barındırma
 hizmetinin kendi günlükleri ayrıca koordinat içerebilir; kendi sunucunuzu çalıştırırsanız bunlar sizde kalır.</p>
 
+<h2>Telegram bildirimi</h2>
+<p>Telegram botuna bir yer (konum, il ya da ilçe adı) ve yarıçap (3-50 km, varsayılan 15) verirseniz, uydu o yerin çevresinde yeni bir yangın sıcaklığı görünce size yazar. Mesaj en yakın tespitin uzaklığını, yönünü, ne kadar önce görüldüğünü, rüzgar bakışını ve haritaya bağlantıyı içerir. Her veri güncellemesinden sonra (yaklaşık 30 dakikada bir) yalnızca yeni gelen, zayıf olmayan (3 MW ve üstü), düşük güvenli olmayan ve sürekli ısı kaynağı sayılmayan tespitler değerlendirilir. Aynı bölge için 6 saat içinde ikinci mesaj gönderilmez.</p>
+<p><strong>Bu bir uyarı sistemi değildir.</strong> Mesaj, uydunun saatler önce gördüğünü bildirir; uydu veriyi tarama anından yaklaşık 3 saat sonra yayımlar ve bazı yangınlar hiç görünmez. Mesaj gelmemesi yangın olmadığı anlamına gelmez. Tehlikedeyseniz 112'yi arayın.</p>
+<p><strong>Gizlilik:</strong> yalnızca Telegram sohbet numaranız ve yerin yaklaşık 1 km'ye yuvarlanmış koordinatı, adı ve yarıçapı saklanır. /durdur yazarsanız hepsi silinir; botu engellerseniz de silinir; bir yıl bota hiç yazmazsanız silinir. Başka bir veri (ad, telefon, e-posta) alınmaz.</p>
+
 <h2>Bilinen sınırlar</h2>
 <ul>
   <li>İndeks ve olay eşikleri bildirilen gerçek yangınlarla sınanmadı; aşağıdaki doğrulama bölümü yalnızca uydu verisiyle yapılabilen ölçümleri içerir.</li>

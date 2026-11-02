@@ -3,6 +3,20 @@
 All notable changes. The format follows [Keep a Changelog](https://keepachangelog.com/) and the
 project uses [semantic versioning](https://semver.org/).
 
+## [0.7.0] - 2026-11-03
+
+### Added
+- **Telegram alerts.** A bot (set `TELEGRAM_BOT_TOKEN`) that people talk to: send a location or a district
+  name (`/yer Çankaya, Ankara`), pick a radius (`/yaricap 1 25`), and get a message when a satellite sees a
+  new fire inside it, with distance, direction, age and the wind relative to the fire. Commands `/liste`,
+  `/durdur`, `/yardim`. After every ingest the new detections are matched against the places; weak, low
+  confidence and always-burning sources are skipped and one fire is announced once in six hours. The bot
+  reads its messages by polling Telegram, so it needs no public address.
+- A "Telegram'dan haber ver" button on every place and a tile on the home page (only when the bot is set up;
+  `GET /alerts/bot`), and an optional public channel that gets big new fires (`TELEGRAM_CHANNEL`).
+- Privacy: only the chat number and a place rounded to a kilometer are stored; `/durdur`, blocking the bot
+  or a year of silence deletes them. Written up on the methodology page.
+
 ## [0.6.0] - 2026-11-03
 
 ### Added

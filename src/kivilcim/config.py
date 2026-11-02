@@ -38,6 +38,14 @@ class Settings(BaseSettings):
     # the canonical addresses use it; when empty the address of the request is used.
     public_url: str = ""
 
+    # Telegram alerts. Create a bot with @BotFather and put its token here; people then talk to the
+    # bot to add places. The username is only used to build the "tell me on Telegram" links.
+    telegram_bot_token: str = ""
+    telegram_bot_username: str = ""
+    # A public channel (@name, or its numeric id) where big new fires are posted. The bot must be an admin.
+    telegram_channel: str = ""
+    telegram_channel_min_frp: float = 400.0  # total heat power (MW) of a zone worth a post
+
     # Open-Meteo's free tier allows 10,000 calls per day. This is a call count, not money:
     # the service stops asking and serves cached weather before reaching that limit.
     open_meteo_daily_quota: int = 7000

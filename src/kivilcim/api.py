@@ -26,6 +26,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from kivilcim import __version__
+from kivilcim.alerts import AlertService, BotPoller, Telegram
 from kivilcim.cards import render_card
 from kivilcim.config import Settings, get_settings
 from kivilcim.db import init_db, make_engine, make_session_factory
@@ -470,6 +471,34 @@ def create_app(
         log.warning("FIRMS_MAP_KEY is not set, so the automatic ingest is off; the site serves what is stored")
         ingest_every = None
 
+    # Telegram alerts: only when a bot token is set, and the bot listens only when the app runs its own timer.
+    alert_service = poller = telegram_client = None
+    bot = {"username": settings.telegram_bot_username}
+    if settings.telegram_bot_token:
+        telegram_client = httpx.Client(timeout=40)
+        telegram = Telegram(settings.telegram_bot_token, telegram_client)
+
+        def weather_for(lat: float, lon: float):
+            try:
+                with session_factory() as session:
+                    w = get_weather(session, weather_client, lat, lon, clock(), settings.weather_cache_minutes, settings.open_meteo_daily_quota)
+                return w.wind_direction_deg, w.wind_speed_kmh
+            except Exception:
+                return None
+
+        def fixed_for(session: Session) -> set:
+            return fixed_cells(session)
+
+        alert_service = AlertService(
+            session_factory, telegram, clock,
+            lambda: (settings.public_url or "").rstrip("/"), weather_for, fixed_for,
+            settings.telegram_channel, settings.telegram_channel_min_frp,
+        )
+        if run_scheduler:
+            poller = BotPoller(alert_service, telegram, session_factory)
+            if not bot["username"]:
+                bot["username"] = telegram.me() or ""
+
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         scheduler = ingest_client = None
@@ -480,7 +509,13 @@ def create_app(
             )
             scheduler.start()
             log.info("automatic ingest started: every %d minutes", ingest_every)
+        if poller:
+            poller.start()
+            log.info("the Telegram bot is listening")
         yield
+        if poller:
+            poller.stop()
+            telegram_client.close()
         if scheduler:
             scheduler.stop()
             ingest_client.close()
@@ -1308,8 +1343,24 @@ def create_app(
                 refresh_elements(session, weather_client, clock())
         except Exception:
             log.exception("could not refresh the satellite orbit data")
+        if alert_service:
+            try:
+                alert_service.dispatch()
+            except Exception:
+                log.exception("could not send the alerts")
         threading.Thread(target=warm_imagery, name="warm-imagery", daemon=True).start()
 
+    class BotInfo(BaseModel):
+        enabled: bool
+        username: str | None = None
+
+    @app.get("/alerts/bot", response_model=BotInfo)
+    def alert_bot(response: Response) -> BotInfo:
+        """Whether the Telegram bot is set up, and its username for the "tell me on Telegram" links."""
+        response.headers["Cache-Control"] = "public, max-age=300"
+        return BotInfo(enabled=bool(alert_service and bot["username"]), username=bot["username"] or None)
+
+    app.state.alerts = alert_service
     app.state.warm_imagery = warm_imagery
 
     app.state.warm_weather = warm_weather  # also lets tests and tools call it

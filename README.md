@@ -22,6 +22,12 @@ wooded land** and want a plain answer in Turkish, and for **people who need to s
 - **"Is there a fire near me?"** Search a district or use your location: the detections within a radius,
   how old they are, and how old the data itself is. The answer says what it cannot know (a satellite passes a
   few times a day, small fires are missed).
+- **"Tell me when it happens" (Telegram).** Talk to the bot once: send a location or a district name, get a
+  message when a satellite sees a new fire within 3 to 50 km. It says how far and in which direction, how
+  long ago, and which way the wind blows relative to the fire. No accounts: only the chat number and a place
+  rounded to a kilometer are kept, and `/durdur` deletes them. Set `TELEGRAM_BOT_TOKEN` (from @BotFather) and
+  keep `python -m kivilcim` running; set `PUBLIC_URL` for links in the messages and, optionally,
+  `TELEGRAM_CHANNEL` for a public channel that gets the big fires.
 - **"Did a satellite even look?"** "No detection" only means something if a satellite scanned the place. Every
   place shows how many times the five fire satellites scanned it in the last 24 hours, when the last and the
   next scan are, and the longest gap with none. Predicted from public orbit data and checked against real

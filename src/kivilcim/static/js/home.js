@@ -28,9 +28,13 @@ export function mount(ctx) {
   const featured = el("div", { class: "panel-body" });
 
   const mine = el("div", { class: "panel-body", hidden: true });
+  const toolTiles = tools();
+  api.bot(signal).then((bot) => {
+    if (bot.enabled && bot.username) toolTiles.append(el("a", { class: "tile tile-wide", href: `https://t.me/${bot.username}`, target: "_blank", rel: "noopener" }, icon("alert", 22), el("b", {}, "Yakınımda yangın çıkınca haber ver"), el("span", {}, "Telegram botuna yerinizi gönderin; uydu yeni bir yangın görünce size yazar")));
+  }).catch(() => {});
   body.append(
     mine,
-    tools(),
+    toolTiles,
     el("div", { class: "section-title" }, el("h2", {}, "Şu an aktif bölgeler")),
     summary,
     explainer(),

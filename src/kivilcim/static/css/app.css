@@ -559,3 +559,6 @@ a.event-card, a.row { color: inherit; text-decoration: none; }
 .embed-card { inset-block-start: var(--s-3); inset-inline-start: var(--s-3); padding: var(--s-3) var(--s-4); display: grid; gap: 2px; max-width: min(340px, calc(100% - 24px)); }
 .embed-card small { color: var(--text-2); }
 .embed-card a { font-weight: 650; font-size: var(--fs-sm); }
+
+.tile-wide { grid-column: 1 / -1; }
+.actions .btn-primary { flex-basis: 100%; }

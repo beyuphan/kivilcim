@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, Index, Integer, String, UniqueConstraint
+from sqlalchemy import BigInteger, DateTime, Float, Index, Integer, String, UniqueConstraint
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
@@ -83,6 +83,43 @@ class OrbitElements(Base):
     line1: Mapped[str] = mapped_column(String(80))
     line2: Mapped[str] = mapped_column(String(80))
     fetched_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class AlertSubscription(Base):
+    """A place a person asked the Telegram bot to watch. Only the chat id and a place rounded to about a
+    kilometer are kept; the person can delete it with /durdur."""
+
+    __tablename__ = "alert_subscriptions"
+    __table_args__ = (Index("ix_alert_subscriptions_chat", "chat_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    chat_id: Mapped[int] = mapped_column(BigInteger)
+    name: Mapped[str] = mapped_column(String(60))
+    lat: Mapped[float] = mapped_column(Float)
+    lon: Mapped[float] = mapped_column(Float)
+    radius_km: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime)  # the last time the person wrote to the bot
+    last_alert_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+
+class AlertSent(Base):
+    """An alert that went out, so the same fire is not announced again at once. `sub_id` -1 is the channel."""
+
+    __tablename__ = "alert_sent"
+
+    sub_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    cell: Mapped[str] = mapped_column(String(80), primary_key=True)
+    sent_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class BotState(Base):
+    """Small facts the bot must remember: the last message it read, the last time it announced."""
+
+    __tablename__ = "bot_state"
+
+    key: Mapped[str] = mapped_column(String(32), primary_key=True)
+    value: Mapped[str] = mapped_column(String(64))
 
 
 class EventImagery(Base):

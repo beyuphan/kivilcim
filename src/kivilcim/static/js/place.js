@@ -24,6 +24,7 @@ export function mount(ctx, params) {
     return;
   }
 
+  let bot = { enabled: false }; // set when the Telegram bot is available
   const title = el("h2", { class: "card-title", style: { fontSize: "var(--fs-xl)" } }, name || "Seçilen konum");
   const verdict = el("div", { class: "card card-pad" }, el("div", { class: "skeleton", style: { height: "60px" } }));
   const weatherBox = el("div", { class: "card card-pad" }, el("div", { class: "skeleton", style: { height: "90px" } }));
@@ -34,6 +35,7 @@ export function mount(ctx, params) {
   const actions = el("div", { class: "actions" });
   body.append(back(), el("div", { class: "section-title" }, title), verdict, threat, scanBox, actions, nearby, weatherBox, detail);
   renderActions();
+  api.bot(signal).then((info) => { bot = info; renderActions(); }).catch(() => {});
   ctx.setTitle(name || "Seçilen konum");
 
   layer.clearLayers();
@@ -124,7 +126,10 @@ export function mount(ctx, params) {
         announce(keep ? "Yerlerimden çıkarıldı" : "Yerlerime eklendi");
         renderActions();
       } }, icon(keep ? "check" : "eye", 18), keep ? "Yerlerimde" : "Yerlerime ekle"),
-      el("button", { class: "btn btn-secondary", type: "button", onclick: share }, icon("arrows-h", 18), "Paylaş"));
+      el("button", { class: "btn btn-secondary", type: "button", onclick: share }, icon("arrows-h", 18), "Paylaş"),
+      bot.enabled && bot.username
+        ? el("a", { class: "btn btn-primary", href: `https://t.me/${bot.username}?start=p${Math.round(lat * 100)}_${Math.round(lon * 100)}_${Math.min(Math.max(Math.round(radius), 3), 50)}`, target: "_blank", rel: "noopener" }, icon("alert", 18), "Yangın çıkınca Telegram'dan haber ver")
+        : null);
   }
 
   function back() {
