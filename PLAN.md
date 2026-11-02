@@ -70,7 +70,8 @@ Technology choices (recommended for the MVP):
 - **Language and framework:** Python, FastAPI
 - **Database:** Start with SQLite, move to PostgreSQL + PostGIS as data grows
 - **Scheduling:** The ingest job is a standalone command (`python -m kivilcim.ingest`) invoked by an external scheduler (OS task scheduler, cron, later a container). It is kept separate from the API process so it is easy to test and restart.
-- **Ingest frequency:** Start with every 15-30 minutes, fetching a recent time window and relying on deduplication. The exact interval and the FIRMS rate limit / `day_range` limit are verified with the first real API call and written back here.
+- **Ingest frequency:** Start with every 15-30 minutes, fetching a recent time window and relying on deduplication. Verified with a real call: the FIRMS limit is 5,000 transactions per 10 minutes, so it does not constrain the interval. The `day_range` maximum is still to be checked.
+- **FIRMS sources:** Start with `VIIRS_SNPP_NRT` and `MODIS_NRT`. Add `VIIRS_NOAA20_NRT` and `VIIRS_NOAA21_NRT` early, because each satellite passes at different times and together they give more frequent observations.
 - **Risk refresh:** A standalone command (`python -m kivilcim.risk`), run hourly after ingest, clusters recent detections and computes the risk for each cluster. Point queries (`/weather`, `/risk`) call Open-Meteo on demand through a cache keyed by coordinates rounded to ~0.1° (about 11 km), with a 30-60 minute TTL. Both paths share the same cached weather fetch.
 - **Time zones:** The API always uses UTC. The frontend displays times in `Europe/Istanbul`.
 - **Tests:** pytest, with fixed fixtures for FIRMS responses
@@ -109,6 +110,10 @@ Notes:
 
 Every response includes a `data_as_of` field and a short `disclaimer` field (not an official warning; call 112 / AFAD in an emergency). The frontend shows `data_as_of` to the user.
 
+`data_as_of` carries two separate times, because they answer different questions:
+- `last_ingest_at`: when the service last successfully fetched data from FIRMS ("is the service up to date?").
+- `latest_observation_at`: the newest satellite observation in the data ("when did a satellite last see the area?"). A real call showed this can be about 11 hours old simply because of satellite pass times, which is normal and not a service failure.
+
 `/fires` implementation note: SQLite has no spatial support, so the query first filters by a bounding box (using an index on `latitude`, `longitude`, `acquired_at`) and then computes exact haversine distance. This is sufficient at the scale of Turkey.
 
 ## 9. Risk map (MVP)
@@ -137,7 +142,7 @@ Every response includes a `data_as_of` field and a short `disclaimer` field (not
 ## 10. Data delay and honesty principles
 
 - Each detection is shown with "observed at [time]", never "burning right now".
-- The older the data, the more prominent the warning in the interface. Provisional thresholds (to be confirmed): under 3 hours normal, 3-6 hours yellow warning, over 6 hours red warning.
+- The older the data, the more prominent the warning in the interface. Provisional thresholds (to be confirmed), applied to `last_ingest_at`: under 3 hours normal, 3-6 hours yellow warning, over 6 hours red warning. The age of `latest_observation_at` is shown separately as information ("last satellite observation: N hours ago"), since long gaps between satellite passes are normal. "No detections" is always worded together with that time, never as "no fire".
 - For false positives, the first MVP release shows low-confidence detections separately (based on `confidence_level`). Flagging recurring fixed hot spots (factories, refineries, etc.) needs history, so it comes in Stage 1.5: a detection is "recurring" if the same ~1 km cell has N or more detections within the last X days (N and X to be decided with real data).
 - Model training does not start until enough labeled data has accumulated.
 
@@ -283,7 +288,8 @@ Teknoloji seçimi (MVP için önerilen):
 - **Dil ve çatı:** Python, FastAPI
 - **Veritabanı:** SQLite ile başla, veri büyüyünce PostgreSQL + PostGIS'e geç
 - **Zamanlama:** Ingest işi bağımsız bir komuttur (`python -m kivilcim.ingest`) ve dışarıdan bir zamanlayıcı (işletim sistemi görev zamanlayıcısı, cron, ileride container) tarafından çağrılır. API sürecinden ayrı tutulur; test etmek ve yeniden başlatmak kolay olur.
-- **Ingest sıklığı:** 15-30 dakikada bir ile başla, yakın zaman penceresini çek ve tekrar kaydı dedup ile engelle. Kesin aralık ile FIRMS istek limiti ve `day_range` sınırı ilk gerçek API çağrısında doğrulanıp buraya yazılır.
+- **Ingest sıklığı:** 15-30 dakikada bir ile başla, yakın zaman penceresini çek ve tekrar kaydı dedup ile engelle. Gerçek çağrıyla doğrulandı: FIRMS limiti 10 dakikada 5.000 işlemdir, bu yüzden aralığı kısıtlamaz. `day_range` üst sınırı henüz kontrol edilecek.
+- **FIRMS kaynakları:** `VIIRS_SNPP_NRT` ve `MODIS_NRT` ile başla. `VIIRS_NOAA20_NRT` ve `VIIRS_NOAA21_NRT` erken eklenmeli; her uydu farklı saatlerde geçer ve birlikte daha sık gözlem sağlarlar.
 - **Risk güncelleme:** Bağımsız bir komut (`python -m kivilcim.risk`) ingest'ten sonra saatlik çalışır, son tespitleri kümeler ve her küme için riski hesaplar. Nokta sorguları (`/weather`, `/risk`) Open-Meteo'yu istek anında, ~0,1°'ye (yaklaşık 11 km) yuvarlanmış koordinat anahtarlı ve 30-60 dakika TTL'li bir önbellek üzerinden çağırır. İki yol aynı önbellekteki hava verisini paylaşır.
 - **Zaman dilimi:** API her zaman UTC kullanır. Arayüz saatleri `Europe/Istanbul` olarak gösterir.
 - **Testler:** pytest, FIRMS yanıtları için sabit (fixture) veriler
@@ -322,6 +328,10 @@ Notlar:
 
 Her yanıtta `data_as_of` alanı ve kısa bir `disclaimer` alanı bulunur (resmi uyarı değildir; acil durumda 112 / AFAD). Arayüz `data_as_of` alanını kullanıcıya gösterir.
 
+`data_as_of` iki ayrı zaman taşır, çünkü farklı sorulara cevap verirler:
+- `last_ingest_at`: servisin FIRMS'ten en son ne zaman başarıyla veri çektiği ("servis güncel mi?").
+- `latest_observation_at`: verideki en yeni uydu gözlemi ("bir uydu bölgeyi en son ne zaman gördü?"). Gerçek bir çağrıda bunun sadece uydu geçiş saatleri yüzünden yaklaşık 11 saat eski olabildiği görüldü; bu normaldir, servis arızası değildir.
+
 `/fires` uygulama notu: SQLite'ta mekansal destek yoktur. Sorgu önce bounding box ile (`latitude`, `longitude`, `acquired_at` indeksiyle) süzer, sonra kesin haversine mesafesini hesaplar. Türkiye ölçeğinde bu yeterlidir.
 
 ## 9. Risk indeksi (MVP)
@@ -350,7 +360,7 @@ Her yanıtta `data_as_of` alanı ve kısa bir `disclaimer` alanı bulunur (resmi
 ## 10. Veri gecikmesi ve dürüstlük ilkeleri
 
 - Her nokta "şu saatte gözlemlendi" bilgisiyle gösterilir, "şu an yanıyor" denmez.
-- Veri ne kadar eskiyse arayüzde o kadar belirgin uyarı verilir. Geçici eşikler (onaylanacak): 3 saatten az normal, 3-6 saat sarı uyarı, 6 saatten fazla kırmızı uyarı.
+- Veri ne kadar eskiyse arayüzde o kadar belirgin uyarı verilir. Geçici eşikler (onaylanacak), `last_ingest_at`'e uygulanır: 3 saatten az normal, 3-6 saat sarı uyarı, 6 saatten fazla kırmızı uyarı. `latest_observation_at`'in yaşı ayrıca bilgi olarak gösterilir ("son uydu gözlemi: N saat önce"), çünkü uydu geçişleri arasındaki uzun boşluklar normaldir. "Tespit yok" her zaman bu zamanla birlikte yazılır, hiçbir zaman "yangın yok" denmez.
 - Yanlış pozitif riski için MVP'nin ilk sürümünde düşük güvenli tespitler (`confidence_level`'a göre) ayrı gösterilir. Tekrarlayan sabit sıcak noktaların (fabrika, rafineri vb.) işaretlenmesi geçmiş veri gerektirdiği için Aşama 1.5'te yapılır: aynı ~1 km'lik hücrede son X gün içinde N ve üzeri tespit varsa "tekrarlayan" sayılır (N ve X gerçek veriyle belirlenir).
 - Model eğitimi, yeterli etiketli veri birikmeden yapılmaz.
 

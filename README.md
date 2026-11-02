@@ -47,7 +47,13 @@ If Windows Application Control blocks SQLAlchemy's compiled extension (`DLL load
 DISABLE_SQLALCHEMY_CEXT=1 pip install --force-reinstall --no-deps --no-binary sqlalchemy sqlalchemy
 ```
 
-Full run instructions will be added once the first backend milestone is in place.
+Run the FIRMS ingest job (needs `FIRMS_MAP_KEY` in `.env`; run it from a scheduler every 15-30 minutes):
+
+```bash
+python -m kivilcim.ingest
+```
+
+The API and the remaining run instructions will be added in the next milestone.
 
 ## Configuration
 
