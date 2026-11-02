@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     # How many days back each run asks for. A window larger than the run interval
     # lets a missed run be recovered; deduplication makes the overlap harmless.
     firms_day_range: int = 2
+    # Minutes between live ingests when the process runs its own timer (`python -m kivilcim`).
+    # FIRMS allows 5,000 requests per 10 minutes, so this only has to keep up with how often the
+    # satellites pass; 30 is plenty. 0 turns the timer off.
+    ingest_interval_minutes: int = 30
 
     # Open-Meteo's free tier allows 10,000 calls per day. This is a call count, not money:
     # the service stops asking and serves cached weather before reaching that limit.

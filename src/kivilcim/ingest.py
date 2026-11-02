@@ -155,14 +155,17 @@ def run_ingest(
     client: httpx.Client,
     settings: Settings,
     now: datetime | None = None,
+    day_range: int | None = None,
 ) -> list[IngestRun]:
-    """Ingest every configured source. One failing source does not stop the others."""
+    """Ingest every configured source. One failing source does not stop the others.
+
+    `day_range` overrides the configured window, for catching up after downtime.
+    """
     if not settings.firms_map_key:
         raise ValueError("FIRMS_MAP_KEY is not set")
+    days = min(MAX_DAY_RANGE, day_range or settings.firms_day_range)
     return [
-        ingest_source(
-            session_factory, client, settings.firms_map_key, source, settings.firms_day_range, now
-        )
+        ingest_source(session_factory, client, settings.firms_map_key, source, days, now)
         for source in settings.source_list
     ]
 

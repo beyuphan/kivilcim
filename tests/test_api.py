@@ -603,6 +603,44 @@ def test_fires_near_antimeridian(client, session_factory):
 # ---- /status and data_as_of -------------------------------------------------
 
 
+def test_status_says_when_the_process_has_no_ingest_timer(client):
+    assert client.get("/status").json()["ingest_interval_minutes"] is None
+
+
+@respx.mock
+def test_the_server_app_runs_its_ingest_timer_and_stops_it(session_factory):
+    route = respx.route(host="firms.modaps.eosdis.nasa.gov").respond(200, text="")
+    settings = Settings(
+        _env_file=None, firms_map_key="K", firms_sources="VIIRS_SNPP_NRT", ingest_interval_minutes=60
+    )
+    app = create_app(session_factory, now=lambda: NOW, settings=settings, run_scheduler=True)
+    with TestClient(app) as client:  # entering the context runs the lifespan startup
+        assert client.get("/status").json()["ingest_interval_minutes"] == 60
+        for _ in range(100):  # the first run happens at once on the background thread
+            if route.call_count:
+                break
+            import time
+
+            time.sleep(0.05)
+        assert route.call_count == 1
+    # leaving the context stopped the timer; nothing else was fetched
+    assert route.call_count == 1
+
+
+def test_no_timer_without_a_firms_key(session_factory):
+    settings = Settings(_env_file=None, firms_map_key="", ingest_interval_minutes=30)
+    app = create_app(session_factory, now=lambda: NOW, settings=settings, run_scheduler=True)
+    with TestClient(app) as client:
+        assert client.get("/status").json()["ingest_interval_minutes"] is None
+
+
+def test_an_interval_of_zero_turns_the_timer_off(session_factory):
+    settings = Settings(_env_file=None, firms_map_key="K", ingest_interval_minutes=0)
+    app = create_app(session_factory, now=lambda: NOW, settings=settings, run_scheduler=True)
+    with TestClient(app) as client:
+        assert client.get("/status").json()["ingest_interval_minutes"] is None
+
+
 def test_status_with_no_runs(client):
     body = client.get("/status").json()
     assert body["sources"] == []

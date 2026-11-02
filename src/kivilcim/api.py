@@ -3,6 +3,7 @@
 Start with: uvicorn kivilcim.api:create_app --factory
 """
 
+import logging
 import threading
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager
@@ -25,6 +26,7 @@ from kivilcim.fixed import cell_of, find_fixed_cells
 from kivilcim.geo import bounding_box, haversine_km
 from kivilcim.models import FireDetection, IngestRun, WeatherSnapshot
 from kivilcim.risk import compute_risk
+from kivilcim.scheduler import IngestScheduler, make_ingest_job
 from kivilcim.weather import (
     ATTRIBUTION,
     CacheStatus,
@@ -34,6 +36,8 @@ from kivilcim.weather import (
     round_coordinate,
 )
 from kivilcim.zones import find_zones
+
+log = logging.getLogger("kivilcim.api")
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -77,6 +81,7 @@ class SourceStatus(BaseModel):
 class StatusResponse(BaseModel):
     data_as_of: DataAsOf
     sources: list[SourceStatus]
+    ingest_interval_minutes: int | None  # None when this process does not run its own timer
     disclaimer: str
 
 
@@ -340,7 +345,10 @@ def create_app(
     now: Callable[[], datetime] | None = None,
     http_client: httpx.Client | None = None,
     settings: Settings | None = None,
+    run_scheduler: bool = False,
 ) -> FastAPI:
+    """Build the app. `run_scheduler` also starts the timer that keeps the data fresh; it is off by
+    default so that tests and tools that only read never reach out to the network."""
     settings = settings or get_settings()
     if session_factory is None:
         engine = make_engine(settings.database_url)
@@ -350,9 +358,27 @@ def create_app(
     owns_client = http_client is None
     weather_client = http_client or httpx.Client(timeout=15)
 
+    ingest_every = (
+        settings.ingest_interval_minutes if run_scheduler and settings.ingest_interval_minutes > 0 else None
+    )
+    if ingest_every and not settings.firms_map_key:
+        log.warning("FIRMS_MAP_KEY is not set, so the automatic ingest is off; the site serves what is stored")
+        ingest_every = None
+
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        scheduler = ingest_client = None
+        if ingest_every:
+            ingest_client = httpx.Client(timeout=60)
+            scheduler = IngestScheduler(
+                make_ingest_job(session_factory, settings, ingest_client), ingest_every * 60
+            )
+            scheduler.start()
+            log.info("automatic ingest started: every %d minutes", ingest_every)
         yield
+        if scheduler:
+            scheduler.stop()
+            ingest_client.close()
         if owns_client:
             weather_client.close()
 
@@ -398,6 +424,7 @@ def create_app(
         return StatusResponse(
             data_as_of=data_as_of(session, current),
             sources=source_statuses(session, current),
+            ingest_interval_minutes=ingest_every,
             disclaimer=DISCLAIMER,
         )
 
@@ -673,3 +700,8 @@ def create_app(
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     return app
+
+
+def create_server_app() -> FastAPI:
+    """The app with its own ingest timer, for `uvicorn kivilcim.api:create_server_app --factory`."""
+    return create_app(run_scheduler=True)
