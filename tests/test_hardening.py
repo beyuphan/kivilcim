@@ -286,10 +286,24 @@ def test_events_and_zones_may_be_cached_briefly_but_fires_and_status_may_not(ses
 # ---- quota transparency -----------------------------------------------------
 
 
+def open_meteo_payload() -> dict:
+    """A forecast response with the readings a /weather request needs."""
+    start = datetime(2026, 6, 28, 0, 0)
+    times = [(start + timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M") for i in range(96)]
+    return {
+        "current": {
+            "time": "2026-07-01T12:00",
+            "temperature_2m": 33.5,
+            "relative_humidity_2m": 22,
+            "wind_speed_10m": 28.4,
+            "wind_direction_10m": 240,
+        },
+        "hourly": {"time": times, "precipitation": [0.0] * 96},
+    }
+
+
 @respx.mock
 def test_status_reports_the_weather_calls_used_today(session_factory):
-    from tests.test_api import open_meteo_payload
-
     respx.route(**OPEN_METEO).respond(200, json=open_meteo_payload())
     client = make_client(session_factory, open_meteo_daily_quota=50)
     assert client.get("/status").json()["weather_calls_today"] == 0
