@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kıvılcım: Geçmiş yangınlar</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #ffffff; --text: #1f2328; --muted: #5b6470; --line: #dcdad4;
+    --accent: #b91c1c; --accent-soft: #fde8e8; --stale: #b91c1c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14161a; --panel: #1d2026; --text: #e8e6e1; --muted: #9aa3ad; --line: #343942; --accent-soft: #3a2326; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 12px 16px 8px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 20px; }
+  header a { color: var(--muted); font-size: 14px; }
+  .tagline { color: var(--muted); font-size: 13px; padding: 0 16px; }
+  .disclaimer { margin: 8px 16px; padding: 8px 12px; border: 1px solid var(--line);
+                border-left: 4px solid var(--stale); background: var(--panel); font-size: 13px; }
+  .layout { display: grid; grid-template-columns: 300px 1fr; gap: 12px; margin: 8px 16px 24px; }
+  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+  #events { display: flex; flex-direction: column; gap: 6px; max-height: 70vh; overflow-y: auto; }
+  .event { text-align: left; font: inherit; color: inherit; padding: 8px 10px; background: var(--panel);
+           border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+  .event.active { border-color: var(--accent); background: var(--accent-soft); }
+  .event .place { font-weight: 600; }
+  .event .meta { font-size: 12px; color: var(--muted); }
+  #map { height: 52vh; min-height: 320px; border: 1px solid var(--line); border-radius: 6px; }
+  .panel { margin-top: 8px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+  .date { font-size: 18px; font-weight: 700; }
+  .stats { color: var(--muted); font-size: 13px; }
+  .controls { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+  .controls input[type=range] { flex: 1; min-width: 160px; }
+  button { font: inherit; padding: 5px 10px; border: 1px solid var(--line); border-radius: 6px;
+           background: var(--panel); color: var(--text); cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  .bars { display: flex; align-items: flex-end; gap: 2px; height: 64px; margin-top: 10px; }
+  .bar { flex: 1; min-width: 4px; background: var(--line); border: 0; padding: 0; border-radius: 2px 2px 0 0; cursor: pointer; }
+  .bar.has { background: #ea580c; } .bar.now { background: var(--accent); outline: 2px solid var(--accent); }
+  .bar.future { opacity: .35; }
+  .axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 2px; }
+  label.toggle { font-size: 13px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+  .small { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  footer { margin: 0 16px 24px; font-size: 12px; color: var(--muted); }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Geçmiş yangınlar</h1>
+  <a href="/">← Güncel harita</a>
+</header>
+<div class="tagline">Uydu verisinin yakaladığı büyük yangınlar: öncesi, sırası ve sonrası</div>
+
+<div class="disclaimer">
+  <strong>Resmi bir kayıt değildir.</strong> Burada listelenenler, uydu tespitlerinin güç, yer ve zamana göre
+  otomatik gruplanmasıdır; doğrulanmış olaylar değildir. Bazıları anız yakma gibi başka ısı kaynakları olabilir.
+  Acil durumda <strong>112</strong>'yi arayın ve <strong>AFAD</strong> ile iletişime geçin.
+</div>
+
+<div class="layout">
+  <div>
+    <div id="events"><div class="small">Olaylar yükleniyor…</div></div>
+  </div>
+  <div>
+    <div id="map"></div>
+    <div class="panel" id="panel" hidden>
+      <div class="date" id="dateLabel"></div>
+      <div class="stats" id="stats"></div>
+      <div class="controls">
+        <button id="first" type="button">Öncesi</button>
+        <button id="prev" type="button" aria-label="Önceki gün">◀</button>
+        <input id="slider" type="range" min="0" max="0" value="0" aria-label="Gün seç">
+        <button id="next" type="button" aria-label="Sonraki gün">▶</button>
+        <button id="peak" type="button">Zirve</button>
+        <button id="last" type="button">Sonrası</button>
+        <button id="play" type="button">Oynat</button>
+      </div>
+      <div class="bars" id="bars" aria-label="Günlük tespit sayısı"></div>
+      <div class="axis"><span id="axisStart"></span><span>günlük tespit sayısı</span><span id="axisEnd"></span></div>
+      <div class="controls">
+        <label class="toggle"><input type="checkbox" id="imagery" checked> Uydu görüntüsünü göster</label>
+      </div>
+      <div class="small">Görüntü: NASA GIBS (VIIRS gerçek renk, yaklaşık 250 m çözünürlük). Seçili günün görüntüsüdür;
+        bulutlar yeri örtebilir, küçük yangınlar ve duman her zaman görünmez. Noktalar uydunun gözlem anıdır.</div>
+      <div class="small">Olaylar; uydu tespitlerinin güç, yer ve zamana göre otomatik gruplanmasıdır. Doğrulanmış olay değildir ve
+        bazıları orman yangını yerine anız yakma gibi başka ısı kaynakları olabilir. Güneydoğu ovalarındaki yaz başı olaylarında
+        bu ihtimal yüksektir.</div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Yangın verisi: <a href="https://firms.modaps.eosdis.nasa.gov/">NASA FIRMS</a>.
+  Uydu görüntüsü: <a href="https://earthdata.nasa.gov/gibs">NASA GIBS</a>.
+  Harita: © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> katkıcıları, ODbL 1.0.
+  Yer adları en yakın ilçe merkezine göre yaklaşıktır.
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+const GIBS = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/{date}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg";
+const BLANK = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+const dayFmt = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+const shortFmt = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short", timeZone: "UTC" });
+const num = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
+
+const $ = (id) => document.getElementById(id);
+function el(tag, text, className) {
+  const node = document.createElement(tag);
+  if (text !== undefined) node.textContent = text;
+  if (className) node.className = className;
+  return node;
+}
+const parse = (iso) => new Date(iso + "T00:00:00Z");
+const iso = (date) => date.toISOString().slice(0, 10);
+
+const map = L.map("map").setView([39, 35], 6);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18, attribution: "© OpenStreetMap" }).addTo(map);
+const markers = L.layerGroup().addTo(map);
+let imageryLayer = null;
+let detail = null, days = [], index = 0, timer = null;
+
+function rangeText(e) {
+  return e.start === e.end ? dayFmt.format(parse(e.start)) : shortFmt.format(parse(e.start)) + " - " + dayFmt.format(parse(e.end));
+}
+
+async function loadEvents() {
+  const box = $("events");
+  try {
+    const response = await fetch("/events?limit=50");
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json();
+    box.replaceChildren();
+    if (!data.events.length) { box.appendChild(el("div", "Kayıtlı büyük olay yok. Geçmiş veriyi yüklemek için README'deki geri doldurma komutuna bakın.", "small")); return; }
+    for (const e of data.events) {
+      const button = el("button", undefined, "event");
+      button.type = "button";
+      button.appendChild(el("div", e.district + " / " + e.province, "place"));
+      button.appendChild(el("div", rangeText(e), "meta"));
+      button.appendChild(el("div", "en güçlü tespit " + num.format(e.max_frp_mw) + " MW · " + e.detections + " tespit", "meta"));
+      button.addEventListener("click", () => select(e, button));
+      button.dataset.id = e.id;
+      box.appendChild(button);
+    }
+    // A link like /history#20260907-374_355 opens that event directly.
+    const wanted = decodeURIComponent(location.hash.slice(1));
+    const match = data.events.find((e) => e.id === wanted);
+    if (match) select(match, box.querySelector('[data-id="' + CSS.escape(match.id) + '"]'));
+  } catch (error) {
+    box.replaceChildren(el("div", "Olaylar alınamadı (" + error.message + ").", "small"));
+  }
+}
+
+async function select(event, button) {
+  stop();
+  document.querySelectorAll(".event.active").forEach((n) => n.classList.remove("active"));
+  if (button) button.classList.add("active");
+  history.replaceState(null, "", "#" + encodeURIComponent(event.id));
+  try {
+    const response = await fetch("/events/" + encodeURIComponent(event.id) + "?days_before=5&days_after=10");
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    detail = await response.json();
+  } catch (error) {
+    $("panel").hidden = false;
+    $("dateLabel").textContent = "Olay yüklenemedi (" + error.message + ")";
+    return;
+  }
+  days = [];
+  for (let d = parse(detail.window_start); iso(d) <= detail.window_end; d = new Date(d.getTime() + 86400000)) days.push(iso(d));
+  for (const d of detail.detections) d.day = d.acquired_at.slice(0, 10);
+
+  const [minLat, minLon, maxLat, maxLon] = detail.event.bbox;
+  map.fitBounds([[minLat - 0.15, minLon - 0.15], [maxLat + 0.15, maxLon + 0.15]]);
+  $("panel").hidden = false;
+  $("slider").max = days.length - 1;
+  $("axisStart").textContent = shortFmt.format(parse(days[0]));
+  $("axisEnd").textContent = shortFmt.format(parse(days[days.length - 1]));
+  buildBars();
+  show(Math.max(0, days.indexOf(detail.event.peak_day)));
+}
+
+function buildBars() {
+  const counts = Object.fromEntries(detail.days.map((d) => [d.date, d.detections]));
+  const max = Math.max(1, ...Object.values(counts));
+  const bars = $("bars");
+  bars.replaceChildren();
+  days.forEach((day, i) => {
+    const bar = el("button", undefined, "bar" + (counts[day] ? " has" : ""));
+    bar.type = "button";
+    bar.style.height = Math.max(2, Math.round(((counts[day] || 0) / max) * 100)) + "%";
+    bar.title = dayFmt.format(parse(day)) + ": " + (counts[day] || 0) + " tespit";
+    bar.addEventListener("click", () => { stop(); show(i); });
+    bars.appendChild(bar);
+  });
+}
+
+function setImagery(day) {
+  if (imageryLayer) { map.removeLayer(imageryLayer); imageryLayer = null; }
+  if (!$("imagery").checked) return;
+  // zIndex keeps the imagery above the street map; detection markers live in a higher pane anyway.
+  imageryLayer = L.tileLayer(GIBS, { date: day, maxNativeZoom: 9, maxZoom: 18, errorTileUrl: BLANK, zIndex: 5 });
+  imageryLayer.addTo(map);
+}
+
+function show(i) {
+  index = Math.min(Math.max(i, 0), days.length - 1);
+  const day = days[index];
+  $("slider").value = index;
+  $("dateLabel").textContent = dayFmt.format(parse(day));
+
+  const counts = Object.fromEntries(detail.days.map((d) => [d.date, d]));
+  const today = counts[day];
+  const phase = day < detail.event.start ? "olaydan önce" : day > detail.event.end ? "olaydan sonra" : "olay sürerken";
+  $("stats").textContent = phase + " · bu gün " + (today ? today.detections + " tespit, " + num.format(today.total_frp_mw) + " MW" : "tespit yok")
+    + (day === detail.event.peak_day ? " · en yoğun gün" : "");
+
+  markers.clearLayers();
+  for (const d of detail.detections) {
+    if (d.day > day) continue;
+    const age = Math.round((parse(day) - parse(d.day)) / 86400000);
+    const style = age === 0
+      ? { color: "#7f1d1d", fillColor: "#dc2626", fillOpacity: 0.85, weight: 1, radius: 5 }
+      : age <= 2
+        ? { color: "#9a3412", fillColor: "#f97316", fillOpacity: 0.55, weight: 1, radius: 4 }
+        : { color: "#6b7280", fillColor: "#9ca3af", fillOpacity: 0.3, weight: 0, radius: 3 };
+    const marker = L.circleMarker([d.latitude, d.longitude], style);
+    marker.bindPopup(dayFmt.format(parse(d.day)) + "<br>" + (d.frp != null ? "Isı gücü: " + d.frp + " MW" : "Isı gücü yok") + "<br>Güven: " + d.confidence_level);
+    markers.addLayer(marker);
+  }
+  document.querySelectorAll("#bars .bar").forEach((bar, n) => {
+    bar.classList.toggle("now", n === index);
+    bar.classList.toggle("future", n > index);
+  });
+  setImagery(day);
+}
+
+function stop() { if (timer) { clearInterval(timer); timer = null; $("play").textContent = "Oynat"; } }
+$("play").addEventListener("click", () => {
+  if (timer) { stop(); return; }
+  if (index >= days.length - 1) show(0);
+  $("play").textContent = "Durdur";
+  timer = setInterval(() => { if (index >= days.length - 1) stop(); else show(index + 1); }, 900);
+});
+$("slider").addEventListener("input", (e) => { stop(); show(Number(e.target.value)); });
+$("prev").addEventListener("click", () => { stop(); show(index - 1); });
+$("next").addEventListener("click", () => { stop(); show(index + 1); });
+$("first").addEventListener("click", () => { stop(); show(0); });
+$("last").addEventListener("click", () => { stop(); show(days.length - 1); });
+$("peak").addEventListener("click", () => { stop(); show(days.indexOf(detail.event.peak_day)); });
+$("imagery").addEventListener("change", () => { if (detail) setImagery(days[index]); });
+
+loadEvents();
+</script>
+</body>
+</html>

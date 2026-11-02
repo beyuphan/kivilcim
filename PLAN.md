@@ -162,7 +162,7 @@ Every response includes a `data_as_of` field and a short `disclaimer` field (not
 **Stage 1.5: Recurring hot spot flagging**
 - Flag fixed heat sources (factories, refineries) using accumulated detection history
 - Shown separately in `/fires`, never silently dropped
-- Status: postponed. It needs weeks to months of history, which a 5-day request window cannot give. Detections keep accumulating from the regular ingest, and when this stage starts the history is backfilled by date from the FIRMS archive. N and X are then chosen from real data
+- Status: flagging recurring hot spots inside `/fires` is still postponed. The history it needs is now available: `python -m kivilcim.ingest --source ... --from ... --to ...` backfills by date (see "Past fires" under Stage 3), and the event finder already removes always-on cells before grouping. N and X for the `/fires` flag are chosen from real data
 
 **Stage 2: Weather and risk index**
 - Decide simplified formula vs full Canadian FWI (see section 9)
@@ -179,6 +179,12 @@ Every response includes a `data_as_of` field and a short `disclaimer` field (not
 - Open-Meteo attribution
 - Responsibility note and data time on every screen
 - Status: first slice done (map at `/`, click or device location, radius and time filters, detections and low-confidence ones drawn differently, data freshness banner, permanent disclaimer, Istanbul time). Province and district selection is also done, using approximate center points of 81 provinces and 973 districts from OpenStreetMap data (ODbL, see `data/README.md`). Still to do: risk layer, PWA install
+- **Past fires** (`/history`, API `/events` and `/events/{id}`): the satellite archive already shows the big fires of 2026, so the page lists them and lets you step through the days before, during and after one, with the detections of each day and NASA GIBS true-color imagery (VIIRS, about 250 m) for that date, so smoke plumes and burn areas can be seen. A link like `/history#<event id>` opens one directly.
+  - How events are found (`events.py`): they grow from strong detections (at least 100 MW, which forest fires reach and crop burning rarely does) and then gather the weaker ones within 2 cells (~0.2°) and from 2 days before to 3 days after. Always-on cells (detecting on at least 25% of all days, only when there are 60 or more days of history) are removed first. An event needs at least 15 detections, 500 MW in total and at most 14 days. These thresholds are provisional and came from a scan of June to November 2026. Seeding with strong detections replaced an earlier "chain nearby detections" version, because weeks of weak crop-burning detections bridged real fires into long blobs that were then dropped (the September 2026 Adana fire was lost that way).
+  - What it finds: 12 events inside Turkey for June to November 2026, among them Seydikemer/Muğla and Kaş/Antalya, Gömeç/Balıkesir (late July and late August) and the 7-10 September fire in Adana (İmamoğlu, 168 MW). Some June events in the Şanlıurfa and Mardin plains are probably crop fires, not forest fires; the page says so. Place names are the nearest district center and approximate.
+  - Data: VIIRS SNPP only for now. Archive product `VIIRS_SNPP_SP` covers older dates (the newest few months are not processed yet) and `VIIRS_SNPP_NRT` keeps roughly the last three months, so the two together cover the period without a gap. The SNPP archive has no data for 11-15 July 2026 (NOAA-20 and MODIS do), so that window is missing; adding `VIIRS_NOAA20_*` would fill it. Backfills are not written to `ingest_runs`, so they cannot affect the freshness shown for the live ingest.
+  - Events are computed on each request (about 1 second for 45,000 detections); caching comes later if needed.
+  - Not done: the event list and its thresholds are not validated against reported fires. The point is a showcase of what the data catches, with the limits stated on the page.
 
 **Stage 4: Validation and analysis**
 - Backtesting on past fires (FIRMS archive + Sentinel-2)
@@ -384,7 +390,7 @@ Her yanıtta `data_as_of` alanı ve kısa bir `disclaimer` alanı bulunur (resmi
 **Aşama 1.5: Tekrarlayan sıcak nokta işaretleme**
 - Biriken tespit geçmişiyle sabit ısı kaynaklarını (fabrika, rafineri) işaretle
 - `/fires` içinde ayrı gösterilir, sessizce silinmez
-- Durum: ertelendi. Haftalar-aylar süren geçmiş gerekir, 5 günlük istek penceresi bunu veremez. Düzenli ingest ile tespitler birikmeye devam eder; bu aşama başlayınca geçmiş, FIRMS arşivinden tarihe göre doldurulur. N ve X o zaman gerçek veriden seçilir
+- Durum: `/fires` içinde tekrarlayan sıcak noktaları işaretleme hâlâ ertelendi. İhtiyaç duyduğu geçmiş artık mevcut: `python -m kivilcim.ingest --source ... --from ... --to ...` tarihe göre geri doldurur (bkz. Aşama 3 altındaki "Geçmiş yangınlar") ve olay bulucu, gruplamadan önce sürekli ateşli hücreleri zaten çıkarıyor. `/fires` işareti için N ve X gerçek veriden seçilir
 
 **Aşama 2: Hava ve risk indeksi**
 - Sadeleştirilmiş formül mü tam Kanada FWI mı karara bağla (bkz. bölüm 9)
@@ -401,6 +407,12 @@ Her yanıtta `data_as_of` alanı ve kısa bir `disclaimer` alanı bulunur (resmi
 - Open-Meteo atfı
 - Sorumluluk notu ve veri zamanı her ekranda
 - Durum: ilk dilim tamam (`/` adresinde harita, tıklayarak ya da cihaz konumuyla seçim, yarıçap ve zaman filtreleri, normal ve düşük güvenli tespitlerin farklı çizimi, veri tazelik bandı, sabit sorumluluk notu, İstanbul saati). İl ve ilçe seçimi de tamam; OpenStreetMap verisinden 81 il ve 973 ilçenin yaklaşık merkez noktaları kullanılıyor (ODbL, bkz. `data/README.md`). Kalanlar: risk katmanı, PWA kurulumu
+- **Geçmiş yangınlar** (`/history`, API `/events` ve `/events/{id}`): uydu arşivi 2026'nın büyük yangınlarını zaten gösteriyor; sayfa bunları listeler ve bir olayın öncesindeki, sırasındaki ve sonrasındaki günleri, her günün tespitleriyle ve o tarihe ait NASA GIBS gerçek renk uydu görüntüsüyle (VIIRS, yaklaşık 250 m) adım adım gezdirir; böylece duman bulutları ve yanık alanlar görülebilir. `/history#<olay kodu>` gibi bir bağlantı doğrudan bir olayı açar.
+  - Olaylar nasıl bulunuyor (`events.py`): güçlü tespitlerden (en az 100 MW; orman yangınları buna ulaşır, anız yakma nadiren) büyürler, sonra 2 hücre (~0,2°) içindeki ve 2 gün öncesinden 3 gün sonrasına kadar olan zayıf tespitleri toplarlar. Sürekli ateşli hücreler (tüm günlerin en az %25'inde tespit veren; yalnızca 60 ya da daha fazla günlük geçmiş varsa) önce çıkarılır. Bir olay en az 15 tespit, toplam 500 MW ve en fazla 14 gün ister. Bu eşikler geçicidir ve Haziran-Kasım 2026 taramasından geldi. Güçlü tespitlerle başlamak, önceki "yakın tespitleri zincirle" sürümünün yerini aldı; çünkü haftalarca süren zayıf anız tespitleri gerçek yangınları uzun kütlelere köprüledi ve bunlar elendi (Eylül 2026 Adana yangını böyle kaybolmuştu).
+  - Ne buluyor: Haziran-Kasım 2026 için Türkiye içinde 12 olay; aralarında Seydikemer/Muğla ve Kaş/Antalya, Gömeç/Balıkesir (Temmuz sonu ve Ağustos sonu) ve Adana'da 7-10 Eylül yangını (İmamoğlu, 168 MW). Şanlıurfa ve Mardin ovalarındaki bazı Haziran olayları büyük olasılıkla orman değil tarla yangınıdır; sayfa bunu söylüyor. Yer adları en yakın ilçe merkezidir ve yaklaşıktır.
+  - Veri: şimdilik yalnızca VIIRS SNPP. Arşiv ürünü `VIIRS_SNPP_SP` eski tarihleri kapsar (en yeni birkaç ay henüz işlenmemiştir), `VIIRS_SNPP_NRT` yaklaşık son üç ayı tutar; ikisi birlikte dönemi boşluksuz kapsar. SNPP arşivinde 11-15 Temmuz 2026 için veri yok (NOAA-20 ve MODIS'te var), bu pencere eksik; `VIIRS_NOAA20_*` eklemek bunu doldurur. Geri doldurmalar `ingest_runs`'a yazılmaz, böylece canlı ingest için gösterilen tazeliği etkileyemezler.
+  - Olaylar her istekte hesaplanır (45.000 tespitte yaklaşık 1 saniye); gerekirse önbellek sonra gelir.
+  - Yapılmayan: olay listesi ve eşikleri bildirilen yangınlarla doğrulanmadı. Amaç, verinin neyi yakaladığının bir vitrini; sınırlar sayfada yazıyor.
 
 **Aşama 4: Doğrulama ve analiz**
 - Geçmiş yangınlarla geri test (FIRMS arşivi + Sentinel-2)

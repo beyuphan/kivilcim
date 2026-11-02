@@ -82,6 +82,19 @@ def test_index_page_is_served_with_the_disclaimer(client):
     assert "AFAD" in response.text
 
 
+def test_history_page_is_served_with_the_disclaimer(client):
+    response = client.get("/history")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "Resmi bir kayıt değildir" in response.text
+    assert "doğrulanmış olaylar değildir" in response.text
+    assert "112" in response.text and "AFAD" in response.text
+
+
+def test_index_links_to_the_history_page(client):
+    assert 'href="/history"' in client.get("/").text
+
+
 def test_district_data_is_served_as_static_json(client):
     response = client.get("/static/ilceler.json")
     assert response.status_code == 200

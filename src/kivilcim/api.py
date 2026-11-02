@@ -343,6 +343,10 @@ def create_app(
     def index() -> FileResponse:
         return FileResponse(STATIC_DIR / "index.html")
 
+    @app.get("/history", include_in_schema=False)
+    def history() -> FileResponse:
+        return FileResponse(STATIC_DIR / "history.html")
+
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}

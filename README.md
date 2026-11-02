@@ -54,7 +54,14 @@ Run the FIRMS ingest job (needs `FIRMS_MAP_KEY` in `.env`; run it from a schedul
 python -m kivilcim.ingest
 ```
 
-Start the server, then open http://127.0.0.1:8000/ for the map (click the map to choose a location) or http://127.0.0.1:8000/docs for the interactive API documentation:
+Load the past months so the history page has something to show (FIRMS answers at most 5 days per request, so this runs in windows; the archive product `_SP` covers older dates and `_NRT` roughly the last three months):
+
+```bash
+python -m kivilcim.ingest --source VIIRS_SNPP_SP --from 2026-06-01 --to 2026-07-31
+python -m kivilcim.ingest --source VIIRS_SNPP_NRT --from 2026-08-01 --to 2026-11-02
+```
+
+Start the server, then open http://127.0.0.1:8000/history for past fires, and http://127.0.0.1:8000/ for the map (click the map to choose a location) or http://127.0.0.1:8000/docs for the interactive API documentation:
 
 ```bash
 uvicorn kivilcim.api:create_app --factory
@@ -65,6 +72,7 @@ Endpoints:
 - `GET /health`: is the service up
 - `GET /status`: last successful update and delay per source, plus `data_as_of`
 - `GET /fires?lat=&lon=&radius_km=&since_hours=`: nearby detections with observation time, confidence and distance. Low-confidence detections are listed separately.
+- `GET /events` and `GET /events/{id}`: big fires found in the satellite history, with the detections and a per-day count from days before to days after. Shown on the page at `/history`. These are grouped satellite detections, not confirmed incidents.
 - `GET /weather?lat=&lon=`: current weather for a point in Turkey (temperature, humidity, wind, rain over 72 hours), cached per ~11 km.
 - `GET /risk?lat=&lon=`: experimental fire danger level from that weather, with the factors behind it. It describes weather conditions, not the probability of a fire.
 
