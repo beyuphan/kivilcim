@@ -17,36 +17,53 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
          font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  header { padding: 12px 16px 8px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  header { padding: 12px 16px 4px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
   h1 { margin: 0; font-size: 20px; }
   header a { color: var(--muted); font-size: 14px; }
   .tagline { color: var(--muted); font-size: 13px; padding: 0 16px; }
   .disclaimer { margin: 8px 16px; padding: 8px 12px; border: 1px solid var(--line);
                 border-left: 4px solid var(--stale); background: var(--panel); font-size: 13px; }
-  .layout { display: grid; grid-template-columns: 300px 1fr; gap: 12px; margin: 8px 16px 24px; }
-  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
-  #events { display: flex; flex-direction: column; gap: 6px; max-height: 70vh; overflow-y: auto; }
+  .layout { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 12px; margin: 8px 16px 16px; align-items: start; }
+  @media (max-width: 820px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+  #events { display: flex; flex-direction: column; gap: 6px; max-height: 78vh; overflow-y: auto; padding-right: 2px; }
+  @media (max-width: 820px) { #events { max-height: 220px; } }
   .event { text-align: left; font: inherit; color: inherit; padding: 8px 10px; background: var(--panel);
            border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+  .event:hover { border-color: var(--muted); }
   .event.active { border-color: var(--accent); background: var(--accent-soft); }
   .event .place { font-weight: 600; }
   .event .meta { font-size: 12px; color: var(--muted); }
-  #map { height: 52vh; min-height: 320px; border: 1px solid var(--line); border-radius: 6px; }
+  .listhead { font-size: 12px; color: var(--muted); margin: 0 0 6px; }
+  .mapwrap { position: relative; }
+  #map { height: 62vh; min-height: 340px; border: 1px solid var(--line); border-radius: 6px; background: #e9e7e1; }
+  .leaflet-tile-pane { filter: grayscale(.55) brightness(1.04); }
+  .overlay { position: absolute; z-index: 500; left: 10px; bottom: 10px; max-width: calc(100% - 20px);
+             background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--line);
+             border-radius: 6px; padding: 8px 10px; font-size: 12px; }
+  .overlay[hidden] { display: none; }
+  .ramp { height: 10px; width: 200px; max-width: 100%; border-radius: 5px; margin: 4px 0 2px;
+          background: linear-gradient(90deg, #ffe66d, #fdb44b, #f97316, #dc2626, #7f1d1d); }
+  .ramp-labels { display: flex; justify-content: space-between; color: var(--muted); }
+  .back { position: absolute; z-index: 500; right: 10px; top: 10px; }
   .panel { margin-top: 8px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
-  .date { font-size: 18px; font-weight: 700; }
-  .stats { color: var(--muted); font-size: 13px; }
-  .controls { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
-  .controls input[type=range] { flex: 1; min-width: 160px; }
+  .title { font-size: 17px; font-weight: 700; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; margin: 10px 0 4px; }
+  .stat { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+  .stat .k { font-size: 11px; color: var(--muted); }
+  .stat .v { font-weight: 700; }
+  .date { font-size: 16px; font-weight: 700; margin-top: 8px; }
+  .controls { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+  .controls input[type=range] { flex: 1; min-width: 150px; }
   button { font: inherit; padding: 5px 10px; border: 1px solid var(--line); border-radius: 6px;
            background: var(--panel); color: var(--text); cursor: pointer; }
-  button:disabled { opacity: .5; cursor: default; }
   .bars { display: flex; align-items: flex-end; gap: 2px; height: 64px; margin-top: 10px; }
-  .bar { flex: 1; min-width: 4px; background: var(--line); border: 0; padding: 0; border-radius: 2px 2px 0 0; cursor: pointer; }
-  .bar.has { background: #ea580c; } .bar.now { background: var(--accent); outline: 2px solid var(--accent); }
+  .bar { flex: 1; min-width: 4px; border: 0; padding: 0; border-radius: 2px 2px 0 0; cursor: pointer; background: var(--line); }
+  .bar.now { outline: 2px solid var(--text); outline-offset: 1px; }
   .bar.future { opacity: .35; }
   .axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 2px; }
-  label.toggle { font-size: 13px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
   .small { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .empty { padding: 16px; color: var(--muted); }
   footer { margin: 0 16px 24px; font-size: 12px; color: var(--muted); }
   footer a { color: inherit; }
 </style>
@@ -56,7 +73,7 @@
   <h1>Geçmiş yangınlar</h1>
   <a href="/">← Güncel harita</a>
 </header>
-<div class="tagline">Uydu verisinin yakaladığı büyük yangınlar: öncesi, sırası ve sonrası</div>
+<div class="tagline">Uydunun yakaladığı büyük yangınlar: ne zaman, nerede, nasıl yayıldı</div>
 
 <div class="disclaimer">
   <strong>Resmi bir kayıt değildir.</strong> Burada listelenenler, uydu tespitlerinin güç, yer ve zamana göre
@@ -66,39 +83,44 @@
 
 <div class="layout">
   <div>
-    <div id="events"><div class="small">Olaylar yükleniyor…</div></div>
+    <p class="listhead" id="listhead">Olaylar yükleniyor…</p>
+    <div id="events"></div>
   </div>
   <div>
-    <div id="map"></div>
+    <div class="mapwrap">
+      <div id="map"></div>
+      <button class="back" id="back" type="button" hidden>← Tüm olaylar</button>
+      <div class="overlay" id="legend" hidden>
+        <div><strong>Gün gün yayılma</strong> (her renk bir gün)</div>
+        <div class="ramp"></div>
+        <div class="ramp-labels"><span id="legendStart"></span><span id="legendEnd"></span></div>
+        <div>Nokta büyüklüğü ısı gücüdür. Gri noktalar olayın dışındaki günlerdir.</div>
+      </div>
+    </div>
     <div class="panel" id="panel" hidden>
-      <div class="date" id="dateLabel"></div>
+      <div class="title" id="title"></div>
+      <div class="sub" id="subtitle"></div>
       <div class="stats" id="stats"></div>
+      <div class="date" id="dateLabel"></div>
+      <div class="sub" id="dayStats"></div>
       <div class="controls">
-        <button id="first" type="button">Öncesi</button>
+        <button id="first" type="button">Başa</button>
         <button id="prev" type="button" aria-label="Önceki gün">◀</button>
         <input id="slider" type="range" min="0" max="0" value="0" aria-label="Gün seç">
         <button id="next" type="button" aria-label="Sonraki gün">▶</button>
-        <button id="peak" type="button">Zirve</button>
-        <button id="last" type="button">Sonrası</button>
+        <button id="last" type="button">Olay sonu</button>
         <button id="play" type="button">Oynat</button>
       </div>
       <div class="bars" id="bars" aria-label="Günlük tespit sayısı"></div>
       <div class="axis"><span id="axisStart"></span><span>günlük tespit sayısı</span><span id="axisEnd"></span></div>
-      <div class="controls">
-        <label class="toggle"><input type="checkbox" id="imagery" checked> Uydu görüntüsünü göster</label>
-      </div>
-      <div class="small">Görüntü: NASA GIBS (VIIRS gerçek renk, yaklaşık 250 m çözünürlük). Seçili günün görüntüsüdür;
-        bulutlar yeri örtebilir, küçük yangınlar ve duman her zaman görünmez. Noktalar uydunun gözlem anıdır.</div>
-      <div class="small">Olaylar; uydu tespitlerinin güç, yer ve zamana göre otomatik gruplanmasıdır. Doğrulanmış olay değildir ve
-        bazıları orman yangını yerine anız yakma gibi başka ısı kaynakları olabilir. Güneydoğu ovalarındaki yaz başı olaylarında
-        bu ihtimal yüksektir.</div>
+      <div class="small">Noktalar uydunun gözlem anıdır, yangın sınırı ya da yanan alan değildir. Uydular bölgeden günde birkaç kez
+        geçer; bulut ve duman bazı tespitleri engelleyebilir. Güneydoğu ovalarındaki yaz başı olaylarında tarla yangını ihtimali yüksektir.</div>
     </div>
   </div>
 </div>
 
 <footer>
-  Yangın verisi: <a href="https://firms.modaps.eosdis.nasa.gov/">NASA FIRMS</a>.
-  Uydu görüntüsü: <a href="https://earthdata.nasa.gov/gibs">NASA GIBS</a>.
+  Yangın verisi: <a href="https://firms.modaps.eosdis.nasa.gov/">NASA FIRMS</a> (VIIRS).
   Harita: © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> katkıcıları, ODbL 1.0.
   Yer adları en yakın ilçe merkezine göre yaklaşıktır.
 </footer>
@@ -106,10 +128,11 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
-const GIBS = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/{date}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg";
-const BLANK = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+// Early days are yellow and the last day is dark red.
+const STOPS = ["#ffe66d", "#fdb44b", "#f97316", "#dc2626", "#7f1d1d"];
 const dayFmt = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 const shortFmt = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short", timeZone: "UTC" });
+const timeFmt = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Istanbul" });
 const num = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
 
 const $ = (id) => document.getElementById(id);
@@ -120,13 +143,27 @@ function el(tag, text, className) {
   return node;
 }
 const parse = (iso) => new Date(iso + "T00:00:00Z");
-const iso = (date) => date.toISOString().slice(0, 10);
+const toIso = (date) => date.toISOString().slice(0, 10);
 
-const map = L.map("map").setView([39, 35], 6);
+function mix(a, b, f) {
+  const p = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const [r, g, bl] = p(a).map((v, i) => Math.round(v + (p(b)[i] - v) * f));
+  return "#" + [r, g, bl].map((v) => v.toString(16).padStart(2, "0")).join("");
+}
+function colorFor(t) {
+  const position = Math.min(Math.max(t, 0), 1) * (STOPS.length - 1);
+  const i = Math.min(Math.floor(position), STOPS.length - 2);
+  return mix(STOPS[i], STOPS[i + 1], position - i);
+}
+
+const canvas = L.canvas({ padding: 0.5 });
+const map = L.map("map", { preferCanvas: true }).setView([39, 35], 6);
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18, attribution: "© OpenStreetMap" }).addTo(map);
-const markers = L.layerGroup().addTo(map);
-let imageryLayer = null;
-let detail = null, days = [], index = 0, timer = null;
+const overview = L.layerGroup().addTo(map);
+const spread = L.layerGroup().addTo(map);
+
+let events = [], buttons = {};
+let detail = null, days = [], items = [], dayTone = new Map(), index = 0, timer = null;
 
 function rangeText(e) {
   return e.start === e.end ? dayFmt.format(parse(e.start)) : shortFmt.format(parse(e.start)) + " - " + dayFmt.format(parse(e.end));
@@ -137,54 +174,114 @@ async function loadEvents() {
   try {
     const response = await fetch("/events?limit=50");
     if (!response.ok) throw new Error("HTTP " + response.status);
-    const data = await response.json();
-    box.replaceChildren();
-    if (!data.events.length) { box.appendChild(el("div", "Kayıtlı büyük olay yok. Geçmiş veriyi yüklemek için README'deki geri doldurma komutuna bakın.", "small")); return; }
-    for (const e of data.events) {
-      const button = el("button", undefined, "event");
-      button.type = "button";
-      button.appendChild(el("div", e.district + " / " + e.province, "place"));
-      button.appendChild(el("div", rangeText(e), "meta"));
-      button.appendChild(el("div", "en güçlü tespit " + num.format(e.max_frp_mw) + " MW · " + e.detections + " tespit", "meta"));
-      button.addEventListener("click", () => select(e, button));
-      button.dataset.id = e.id;
-      box.appendChild(button);
-    }
-    // A link like /history#20260907-374_355 opens that event directly.
-    const wanted = decodeURIComponent(location.hash.slice(1));
-    const match = data.events.find((e) => e.id === wanted);
-    if (match) select(match, box.querySelector('[data-id="' + CSS.escape(match.id) + '"]'));
+    events = (await response.json()).events;
   } catch (error) {
-    box.replaceChildren(el("div", "Olaylar alınamadı (" + error.message + ").", "small"));
-  }
-}
-
-async function select(event, button) {
-  stop();
-  document.querySelectorAll(".event.active").forEach((n) => n.classList.remove("active"));
-  if (button) button.classList.add("active");
-  history.replaceState(null, "", "#" + encodeURIComponent(event.id));
-  try {
-    const response = await fetch("/events/" + encodeURIComponent(event.id) + "?days_before=5&days_after=10");
-    if (!response.ok) throw new Error("HTTP " + response.status);
-    detail = await response.json();
-  } catch (error) {
-    $("panel").hidden = false;
-    $("dateLabel").textContent = "Olay yüklenemedi (" + error.message + ")";
+    $("listhead").textContent = "Olaylar alınamadı (" + error.message + ").";
     return;
   }
-  days = [];
-  for (let d = parse(detail.window_start); iso(d) <= detail.window_end; d = new Date(d.getTime() + 86400000)) days.push(iso(d));
-  for (const d of detail.detections) d.day = d.acquired_at.slice(0, 10);
+  if (!events.length) {
+    $("listhead").textContent = "";
+    box.appendChild(el("div", "Kayıtlı büyük olay yok. Geçmiş veriyi yüklemek için README'deki geri doldurma komutuna bakın.", "empty"));
+    return;
+  }
+  $("listhead").textContent = events.length + " büyük olay · yeniden eskiye · bir olaya tıklayın";
+  for (const e of events) {
+    const button = el("button", undefined, "event");
+    button.type = "button";
+    button.appendChild(el("div", e.district + " / " + e.province, "place"));
+    button.appendChild(el("div", rangeText(e), "meta"));
+    button.appendChild(el("div", "en güçlü tespit " + num.format(e.max_frp_mw) + " MW · " + e.detections + " tespit · " + e.days + " gün", "meta"));
+    button.addEventListener("click", () => select(e));
+    buttons[e.id] = button;
+    box.appendChild(button);
 
-  const [minLat, minLon, maxLat, maxLon] = detail.event.bbox;
-  map.fitBounds([[minLat - 0.15, minLon - 0.15], [maxLat + 0.15, maxLon + 0.15]]);
+    // On the overview map every event is a circle sized by its total heat power.
+    const radius = Math.min(24, 7 + Math.sqrt(e.total_frp_mw) / 6);
+    L.circleMarker([e.center_lat, e.center_lon], {
+      renderer: canvas, radius, color: "#7f1d1d", weight: 1, fillColor: "#dc2626", fillOpacity: 0.5,
+    }).bindTooltip(e.district + " / " + e.province + " · " + rangeText(e)).on("click", () => select(e)).addTo(overview);
+  }
+  const wanted = decodeURIComponent(location.hash.slice(1));
+  const match = events.find((e) => e.id === wanted);
+  if (match) select(match);
+}
+
+async function select(event) {
+  stop();
+  document.querySelectorAll(".event.active").forEach((n) => n.classList.remove("active"));
+  if (buttons[event.id]) {
+    buttons[event.id].classList.add("active");
+    buttons[event.id].scrollIntoView({ block: "nearest" });
+  }
+  let data;
+  try {
+    const response = await fetch("/events/" + encodeURIComponent(event.id) + "?days_before=2&days_after=5&padding_deg=0.05");
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    data = await response.json();
+  } catch (error) {
+    $("panel").hidden = false;
+    $("title").textContent = "Olay yüklenemedi (" + error.message + ")";
+    return;
+  }
+  history.replaceState(null, "", "#" + encodeURIComponent(event.id));
+  build(data);
+}
+
+function build(data) {
+  detail = data;
+  const ev = data.event;
+  days = [];
+  for (let d = parse(data.window_start); toIso(d) <= data.window_end; d = new Date(d.getTime() + 86400000)) days.push(toIso(d));
+  const eventDays = days.filter((d) => d >= ev.start && d <= ev.end);
+  dayTone = new Map(eventDays.map((d, i) => [d, eventDays.length > 1 ? i / (eventDays.length - 1) : 1]));
+
+  // Every point is drawn once. Moving the slider only restyles them, so nothing reloads or flickers.
+  map.removeLayer(overview);
+  spread.clearLayers();
+  items = [];
+  for (const d of data.detections) {
+    const day = d.acquired_at.slice(0, 10);
+    const radius = Math.min(11, 3 + Math.sqrt(d.frp || 0) / 3);
+    const marker = L.circleMarker([d.latitude, d.longitude], { renderer: canvas, radius, weight: 0.5, fillOpacity: 0 });
+    marker.bindPopup(
+      "<strong>" + dayFmt.format(parse(day)) + "</strong><br>Uydu gözlemi: " + timeFmt.format(new Date(d.acquired_at))
+      + " (İstanbul)<br>Isı gücü: " + (d.frp != null ? d.frp + " MW" : "yok") + "<br>Güven: " + d.confidence_level,
+    );
+    spread.addLayer(marker);
+    items.push({ marker, day, tone: dayTone.get(day) });
+  }
+  const [minLat, minLon, maxLat, maxLon] = ev.bbox;
+  map.fitBounds([[minLat - 0.08, minLon - 0.08], [maxLat + 0.08, maxLon + 0.08]], { maxZoom: 11 });
+
+  $("legend").hidden = false;
+  $("back").hidden = false;
+  $("legendStart").textContent = shortFmt.format(parse(ev.start));
+  $("legendEnd").textContent = shortFmt.format(parse(ev.end));
   $("panel").hidden = false;
+  $("title").textContent = ev.district + " / " + ev.province + ", " + rangeText(ev);
+  $("subtitle").textContent = "Yer adı en yakın ilçe merkezine göredir ve yaklaşıktır.";
+  const stats = [
+    ["Süre", ev.days + " gün"],
+    ["En yoğun gün", shortFmt.format(parse(ev.peak_day))],
+    ["Tespit sayısı", num.format(ev.detections)],
+    ["En güçlü tespit", num.format(ev.max_frp_mw) + " MW"],
+  ];
+  $("stats").replaceChildren(...stats.map(([k, v]) => {
+    const box = el("div", undefined, "stat");
+    box.append(el("div", k, "k"), el("div", v, "v"));
+    return box;
+  }));
   $("slider").max = days.length - 1;
   $("axisStart").textContent = shortFmt.format(parse(days[0]));
   $("axisEnd").textContent = shortFmt.format(parse(days[days.length - 1]));
   buildBars();
-  show(Math.max(0, days.indexOf(detail.event.peak_day)));
+  show(endIndex());
+}
+
+// The last day of the event itself. Days after it are only there to show what came next.
+function endIndex() {
+  const i = days.indexOf(detail.event.end);
+  return i >= 0 ? i : days.length - 1;
 }
 
 function buildBars() {
@@ -193,53 +290,57 @@ function buildBars() {
   const bars = $("bars");
   bars.replaceChildren();
   days.forEach((day, i) => {
-    const bar = el("button", undefined, "bar" + (counts[day] ? " has" : ""));
+    const bar = el("button", undefined, "bar");
     bar.type = "button";
-    bar.style.height = Math.max(2, Math.round(((counts[day] || 0) / max) * 100)) + "%";
+    bar.style.height = Math.max(3, Math.round(((counts[day] || 0) / max) * 100)) + "%";
+    bar.style.background = dayTone.has(day) ? colorFor(dayTone.get(day)) : "#9ca3af";
     bar.title = dayFmt.format(parse(day)) + ": " + (counts[day] || 0) + " tespit";
     bar.addEventListener("click", () => { stop(); show(i); });
     bars.appendChild(bar);
   });
 }
 
-function setImagery(day) {
-  if (imageryLayer) { map.removeLayer(imageryLayer); imageryLayer = null; }
-  if (!$("imagery").checked) return;
-  // zIndex keeps the imagery above the street map; detection markers live in a higher pane anyway.
-  imageryLayer = L.tileLayer(GIBS, { date: day, maxNativeZoom: 9, maxZoom: 18, errorTileUrl: BLANK, zIndex: 5 });
-  imageryLayer.addTo(map);
-}
-
 function show(i) {
   index = Math.min(Math.max(i, 0), days.length - 1);
   const day = days[index];
+  const ev = detail.event;
   $("slider").value = index;
   $("dateLabel").textContent = dayFmt.format(parse(day));
+  const today = detail.days.find((d) => d.date === day);
+  const phase = day < ev.start ? "olaydan önce" : day > ev.end ? "olaydan sonra" : "olay sürerken";
+  $("dayStats").textContent = phase + " · bu gün " + (today ? today.detections + " tespit, toplam " + num.format(today.total_frp_mw) + " MW" : "tespit yok")
+    + (day === ev.peak_day ? " · en yoğun gün" : "");
 
-  const counts = Object.fromEntries(detail.days.map((d) => [d.date, d]));
-  const today = counts[day];
-  const phase = day < detail.event.start ? "olaydan önce" : day > detail.event.end ? "olaydan sonra" : "olay sürerken";
-  $("stats").textContent = phase + " · bu gün " + (today ? today.detections + " tespit, " + num.format(today.total_frp_mw) + " MW" : "tespit yok")
-    + (day === detail.event.peak_day ? " · en yoğun gün" : "");
-
-  markers.clearLayers();
-  for (const d of detail.detections) {
-    if (d.day > day) continue;
-    const age = Math.round((parse(day) - parse(d.day)) / 86400000);
-    const style = age === 0
-      ? { color: "#7f1d1d", fillColor: "#dc2626", fillOpacity: 0.85, weight: 1, radius: 5 }
-      : age <= 2
-        ? { color: "#9a3412", fillColor: "#f97316", fillOpacity: 0.55, weight: 1, radius: 4 }
-        : { color: "#6b7280", fillColor: "#9ca3af", fillOpacity: 0.3, weight: 0, radius: 3 };
-    const marker = L.circleMarker([d.latitude, d.longitude], style);
-    marker.bindPopup(dayFmt.format(parse(d.day)) + "<br>" + (d.frp != null ? "Isı gücü: " + d.frp + " MW" : "Isı gücü yok") + "<br>Güven: " + d.confidence_level);
-    markers.addLayer(marker);
+  for (const it of items) {
+    if (it.day > day) {
+      it.marker.setStyle({ fillOpacity: 0, opacity: 0 });  // not yet happened
+      continue;
+    }
+    const today = it.day === day;
+    if (it.tone === undefined) {
+      it.marker.setStyle({ fillColor: "#9ca3af", color: "#6b7280", fillOpacity: 0.5, opacity: 0.7, weight: 0.5 });
+    } else {
+      it.marker.setStyle({
+        fillColor: colorFor(it.tone), color: today ? "#111" : "#00000055",
+        fillOpacity: 0.85, opacity: 1, weight: today ? 1.6 : 0.5,
+      });
+    }
   }
   document.querySelectorAll("#bars .bar").forEach((bar, n) => {
     bar.classList.toggle("now", n === index);
     bar.classList.toggle("future", n > index);
   });
-  setImagery(day);
+}
+
+function reset() {
+  stop();
+  detail = null; items = [];
+  spread.clearLayers();
+  overview.addTo(map);
+  $("panel").hidden = true; $("legend").hidden = true; $("back").hidden = true;
+  document.querySelectorAll(".event.active").forEach((n) => n.classList.remove("active"));
+  history.replaceState(null, "", location.pathname);
+  map.setView([39, 35], 6);
 }
 
 function stop() { if (timer) { clearInterval(timer); timer = null; $("play").textContent = "Oynat"; } }
@@ -247,15 +348,15 @@ $("play").addEventListener("click", () => {
   if (timer) { stop(); return; }
   if (index >= days.length - 1) show(0);
   $("play").textContent = "Durdur";
-  timer = setInterval(() => { if (index >= days.length - 1) stop(); else show(index + 1); }, 900);
+  // Playing starts from the first day of the window so the whole spread is seen.
+  timer = setInterval(() => { if (index >= days.length - 1) stop(); else show(index + 1); }, 700);
 });
 $("slider").addEventListener("input", (e) => { stop(); show(Number(e.target.value)); });
 $("prev").addEventListener("click", () => { stop(); show(index - 1); });
 $("next").addEventListener("click", () => { stop(); show(index + 1); });
 $("first").addEventListener("click", () => { stop(); show(0); });
-$("last").addEventListener("click", () => { stop(); show(days.length - 1); });
-$("peak").addEventListener("click", () => { stop(); show(days.indexOf(detail.event.peak_day)); });
-$("imagery").addEventListener("change", () => { if (detail) setImagery(days[index]); });
+$("last").addEventListener("click", () => { stop(); show(endIndex()); });
+$("back").addEventListener("click", reset);
 
 loadEvents();
 </script>

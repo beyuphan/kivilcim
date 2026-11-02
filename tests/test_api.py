@@ -89,6 +89,8 @@ def test_history_page_is_served_with_the_disclaimer(client):
     assert "Resmi bir kayıt değildir" in response.text
     assert "doğrulanmış olaylar değildir" in response.text
     assert "112" in response.text and "AFAD" in response.text
+    # The page draws the spread from detections only; it must not pull satellite imagery tiles.
+    assert "gibs.earthdata.nasa.gov" not in response.text
 
 
 def test_index_links_to_the_history_page(client):
