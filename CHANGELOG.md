@@ -3,6 +3,15 @@
 All notable changes. The format follows [Keep a Changelog](https://keepachangelog.com/) and the
 project uses [semantic versioning](https://semver.org/).
 
+## [0.4.0] - 2026-11-03
+
+### Added
+- **Wind and fire.** On a place near a fire, the page says whether the wind blows from the nearest detection
+  toward the place, across, or away, draws the line to the fire and lists the district centers within 25 km
+  of it with the same check. My places show the wind verdict too. It is geometry on the wind now, not a
+  forecast, and the page and the methodology say so.
+- A share button on a place (the system share sheet, or a copied link).
+
 ## [0.3.0] - 2026-11-03
 
 ### Added

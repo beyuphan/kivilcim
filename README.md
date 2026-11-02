@@ -22,6 +22,10 @@ wooded land** and want a plain answer in Turkish, and for **people who need to s
 - **"Is there a fire near me?"** Search a district or use your location: the detections within a radius,
   how old they are, and how old the data itself is. The answer says what it cannot know (a satellite passes a
   few times a day, small fires are missed).
+- **"Is it coming toward me?"** When a fire is near a place, the page compares the wind (direction and
+  speed, from Open-Meteo) with where the nearest detection is: wind blowing from the fire toward you, across,
+  or away. It draws the line to the fire and lists the district centers around it with the same wind check.
+  This is plain geometry on the wind right now, not a spread forecast, and it says so.
 - **"My places."** Save the village house, the field, the summer cottage. The home page shows each one with
   what the satellites saw within 10 km in the last day. The list stays in your browser; there are no accounts.
 - **"Did it burn?"** Give any place and the dates of a fire and see the 30 m satellite image from before

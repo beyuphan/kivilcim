@@ -6,6 +6,7 @@ import { levelColor, fit, TURKEY, getCanvas } from "./map.js";
 import { eventCard } from "./history.js";
 import * as saved from "./saved.js";
 import { distanceKm } from "./tilemath.js";
+import { windRelation, describe } from "./wind.js";
 
 const SMALL = 2; // zones with this many detections or fewer are tucked away by default
 
@@ -170,7 +171,18 @@ export function mount(ctx) {
       api.fires(place.lat, place.lon, 10, 24, signal).then((f) => {
         const near = f.fires[0];
         meta.textContent = near ? `10 km içinde ${plural(f.count, "tespit", "tespit")} · en yakını ${fmt.dec(distanceKm(place.lat, place.lon, near.latitude, near.longitude))} km, ${agoFrom(near.acquired_at)}` : `10 km içinde son 24 saatte tespit yok · son veri ${agoFrom(f.data_as_of.latest_observation_at)}`;
-        clear(side).append(el("span", { class: "pill", dataset: { level: near ? "very_high" : "low" } }, near ? "Yangın yakında" : "Tespit yok"));
+        const pill = el("span", { class: "pill", dataset: { level: near ? "very_high" : "low" } }, near ? "Yangın yakında" : "Tespit yok");
+        clear(side).append(pill);
+        if (near) {
+          // Which way is the wind blowing, relative to the nearest fire?
+          api.weather(place.lat, place.lon, signal).then((w) => {
+            if (!w) return;
+            const rel = windRelation({ lat: near.latitude, lon: near.longitude }, place, w.weather.wind_direction_deg, w.weather.wind_speed_kmh);
+            const words = describe(rel.relation, distanceKm(place.lat, place.lon, near.latitude, near.longitude));
+            meta.textContent += ` · ${words.short.toLowerCase()}`;
+            if (rel.relation === "toward") pill.dataset.level = words.level;
+          });
+        }
       }).catch((error) => { if (error.name !== "AbortError") meta.textContent = "Kontrol edilemedi"; });
     }
   }

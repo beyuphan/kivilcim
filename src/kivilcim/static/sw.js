@@ -31,6 +31,7 @@ const SHELL = [
   "/static/js/compare.js",
   "/static/js/imagepanel.js",
   "/static/js/saved.js",
+  "/static/js/wind.js",
   "/static/js/check.js",
   "/static/js/methodology.js",
   "/static/vendor/leaflet/leaflet.js",

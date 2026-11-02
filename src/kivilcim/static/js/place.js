@@ -5,6 +5,8 @@ import { el, clear, icon, fmt, agoFrom, levelPill, FACTORS, CONFIDENCE, satellit
 import { flyTo, getCanvas, levelColor } from "./map.js";
 import { loadIndex, nearestName } from "./search.js";
 import * as saved from "./saved.js";
+import { windRelation, describe, compassName, fromName } from "./wind.js";
+import { distanceKm } from "./tilemath.js";
 
 const HOURS = 24;
 
@@ -26,8 +28,10 @@ export function mount(ctx, params) {
   const verdict = el("div", { class: "card card-pad" }, el("div", { class: "skeleton", style: { height: "60px" } }));
   const weatherBox = el("div", { class: "card card-pad" }, el("div", { class: "skeleton", style: { height: "90px" } }));
   const detail = el("div", { class: "card" });
+  const threat = el("div", { class: "card card-pad threat", hidden: true });
+  const nearby = el("div", { class: "card", hidden: true });
   const actions = el("div", { class: "actions" });
-  body.append(back(), el("div", { class: "section-title" }, title), verdict, actions, weatherBox, detail);
+  body.append(back(), el("div", { class: "section-title" }, title), verdict, threat, actions, nearby, weatherBox, detail);
   renderActions();
   ctx.setTitle(name || "Seçilen konum");
 
@@ -44,6 +48,7 @@ export function mount(ctx, params) {
 
   Promise.all([api.fires(lat, lon, radius, HOURS, signal), api.weather(lat, lon, signal)]).then(([fires, weather]) => {
     renderVerdict(fires);
+    renderThreat(fires, weather);
     renderWeather(weather, fires);
     renderDetail(fires);
     drawFires(fires);
@@ -52,6 +57,59 @@ export function mount(ctx, params) {
     clear(verdict).append(el("p", {}, "Veriler yüklenemedi. Bağlantınızı kontrol edip yeniden deneyin."));
     clear(weatherBox).remove();
   });
+
+  // Which way the wind blows relative to the nearest fire, and which towns lie in its path.
+  function renderThreat(fires, weather) {
+    const near = fires.fires[0];
+    if (!near || !weather) return;
+    const w = weather.weather;
+    const here = { lat, lon };
+    const fire = { lat: near.latitude, lon: near.longitude };
+    const rel = windRelation(fire, here, w.wind_direction_deg, w.wind_speed_kmh);
+    const words = describe(rel.relation, near.distance_km);
+    const wind = rel.windTo == null ? "" : ` Rüzgar ${fromName(w.wind_direction_deg)} ${fmt.num(w.wind_speed_kmh)} km/sa esiyor.`;
+    threat.hidden = false;
+    clear(threat).append(
+      el("div", { class: "section-title" }, el("h3", { class: "card-title" }, "Rüzgar ve yangın"), el("span", { class: "pill", dataset: { level: words.level } }, words.short)),
+      el("p", { style: { marginTop: "8px" } }, `En yakın tespit ${compassName(rel.fireBearing)} yönünde, ${fmt.dec(near.distance_km)} km uzakta.${wind} ${words.text}`),
+      el("p", { class: "legend-note", style: { marginTop: "8px" } }, "Bu şu anki rüzgara göre bir bakış; saatler içinde yön değişebilir. Yayılma tahmini değildir: arazi ve bitki örtüsü çok daha belirleyicidir."));
+    L.polyline([[lat, lon], [near.latitude, near.longitude]], { color: levelColor(words.level), weight: 3, dashArray: "6 8", interactive: false }).addTo(layer);
+    renderNearby(near, w);
+  }
+
+  // The district centers close to the nearest fire, and whether the wind carries toward each of them.
+  async function renderNearby(near, w) {
+    const entries = await loadIndex().catch(() => null);
+    if (!entries || signal.aborted) return;
+    const fire = { lat: near.latitude, lon: near.longitude };
+    const towns = entries
+      .filter((e) => e.kind === "ilçe")
+      .map((e) => ({ e, km: distanceKm(fire.lat, fire.lon, e.lat, e.lon) }))
+      .filter((t) => t.km <= 25)
+      .sort((a, b) => a.km - b.km)
+      .slice(0, 6);
+    if (!towns.length) return;
+    nearby.hidden = false;
+    clear(nearby).append(el("div", { class: "section-title", style: { padding: "12px 12px 4px" } }, el("h3", { class: "card-title" }, "Yangına yakın ilçe merkezleri")));
+    for (const { e, km } of towns) {
+      const rel = windRelation(fire, e, w.wind_direction_deg, w.wind_speed_kmh);
+      const words = describe(rel.relation, km);
+      nearby.append(el("a", { class: "row", href: `/?lat=${e.lat.toFixed(4)}&lon=${e.lon.toFixed(4)}&r=25&name=${encodeURIComponent(`${e.name}, ${e.sub}`)}`, "data-link": "" },
+        el("span", { class: "row-title" }, `${e.name}, ${e.sub}`),
+        el("span", { class: "row-side" }, el("span", { class: "pill", dataset: { level: rel.relation === "toward" ? words.level : "unknown" } }, rel.relation === "toward" ? "Rüzgar yönünde" : "Rüzgar dışında")),
+        el("span", { class: "row-meta" }, `yangından ${fmt.dec(km)} km, ${compassName(rel.fireBearing + 180)} yönünde`)));
+    }
+    nearby.append(el("p", { class: "legend-note", style: { padding: "4px 16px 12px" } }, "Yalnızca ilçe merkezleri; köyler listede yok. \"Rüzgar yönünde\", şu anki rüzgarın yangından o merkeze doğru estiği anlamına gelir."));
+  }
+
+  async function share() {
+    const text = `${name || "Bu yer"} çevresinde son ${HOURS} saatte uydu ${verdictCount} tespit gördü.`;
+    const url = location.href;
+    try {
+      if (navigator.share) await navigator.share({ title: "Kıvılcım", text, url });
+      else { await navigator.clipboard.writeText(`${text} ${url}`); announce("Bağlantı kopyalandı"); }
+    } catch { /* the person closed the share sheet */ }
+  }
 
   function renderActions() {
     clear(actions);
@@ -63,14 +121,18 @@ export function mount(ctx, params) {
         else if (!saved.add({ name: name || "Seçilen yer", lat, lon, r: Math.min(radius, 25) })) return announce(`En fazla ${saved.limit} yer kaydedebilirsiniz.`);
         announce(keep ? "Yerlerimden çıkarıldı" : "Yerlerime eklendi");
         renderActions();
-      } }, icon(keep ? "check" : "eye", 18), keep ? "Yerlerimde" : "Yerlerime ekle"));
+      } }, icon(keep ? "check" : "eye", 18), keep ? "Yerlerimde" : "Yerlerime ekle"),
+      el("button", { class: "btn btn-secondary", type: "button", onclick: share }, icon("arrows-h", 18), "Paylaş"));
   }
 
   function back() {
     return el("a", { class: "btn btn-ghost btn-small", href: "/", "data-link": "", style: { alignSelf: "flex-start" } }, icon("arrow-left", 18), "Tüm bölgeler");
   }
 
+  let verdictCount = 0;
+
   function renderVerdict(fires) {
+    verdictCount = fires.count;
     clear(verdict);
     const n = fires.count;
     const nearest = fires.fires[0];

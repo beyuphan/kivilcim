@@ -503,7 +503,7 @@ img, svg { display: block; max-width: 100%; }
 
 /* ---- additions ------------------------------------------------------------------------------ */
 
-a.event-card { color: inherit; text-decoration: none; }
+a.event-card, a.row { color: inherit; text-decoration: none; }
 .panel > * { flex-shrink: 0; }
 .panel > .notice { margin-block-start: auto; }
 .panel-body[aria-busy="true"] { min-height: 200px; }
@@ -546,3 +546,5 @@ a.event-card { color: inherit; text-decoration: none; }
   .compare-label { inset-block-start: 64px; }
   .map-toggle { inset-inline-end: 60px; max-width: calc(100% - 130px); }
 }
+
+.threat .pill { flex: none; }
