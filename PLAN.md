@@ -70,7 +70,7 @@ Technology choices (recommended for the MVP):
 - **Language and framework:** Python, FastAPI
 - **Database:** Start with SQLite, move to PostgreSQL + PostGIS as data grows
 - **Scheduling:** The ingest job is a standalone command (`python -m kivilcim.ingest`) invoked by an external scheduler (OS task scheduler, cron, later a container). It is kept separate from the API process so it is easy to test and restart.
-- **Ingest frequency:** Start with every 15-30 minutes, fetching a recent time window and relying on deduplication. Verified with a real call: the FIRMS limit is 5,000 transactions per 10 minutes, so it does not constrain the interval. The `day_range` maximum is still to be checked.
+- **Ingest frequency:** Start with every 15-30 minutes, fetching a recent time window and relying on deduplication. Verified with a real call: the FIRMS limit is 5,000 transactions per 10 minutes, so it does not constrain the interval. The `day_range` maximum is 5 days per request (6 or more returns HTTP 400). Older data needs a start-date parameter, to be verified when it is needed.
 - **FIRMS sources:** Start with `VIIRS_SNPP_NRT` and `MODIS_NRT`. Add `VIIRS_NOAA20_NRT` and `VIIRS_NOAA21_NRT` early, because each satellite passes at different times and together they give more frequent observations.
 - **Risk refresh:** A standalone command (`python -m kivilcim.risk`), run hourly after ingest, clusters recent detections and computes the risk for each cluster. Point queries (`/weather`, `/risk`) call Open-Meteo on demand through a cache keyed by coordinates rounded to ~0.1° (about 11 km), with a 30-60 minute TTL. Both paths share the same cached weather fetch.
 - **Time zones:** The API always uses UTC. The frontend displays times in `Europe/Istanbul`.
@@ -162,6 +162,7 @@ Every response includes a `data_as_of` field and a short `disclaimer` field (not
 **Stage 1.5: Recurring hot spot flagging**
 - Flag fixed heat sources (factories, refineries) using accumulated detection history
 - Shown separately in `/fires`, never silently dropped
+- Status: postponed. It needs weeks to months of history, which a 5-day request window cannot give. Detections keep accumulating from the regular ingest, and when this stage starts the history is backfilled by date from the FIRMS archive. N and X are then chosen from real data
 
 **Stage 2: Weather and risk index**
 - Decide simplified formula vs full Canadian FWI (see section 9)
@@ -288,7 +289,7 @@ Teknoloji seçimi (MVP için önerilen):
 - **Dil ve çatı:** Python, FastAPI
 - **Veritabanı:** SQLite ile başla, veri büyüyünce PostgreSQL + PostGIS'e geç
 - **Zamanlama:** Ingest işi bağımsız bir komuttur (`python -m kivilcim.ingest`) ve dışarıdan bir zamanlayıcı (işletim sistemi görev zamanlayıcısı, cron, ileride container) tarafından çağrılır. API sürecinden ayrı tutulur; test etmek ve yeniden başlatmak kolay olur.
-- **Ingest sıklığı:** 15-30 dakikada bir ile başla, yakın zaman penceresini çek ve tekrar kaydı dedup ile engelle. Gerçek çağrıyla doğrulandı: FIRMS limiti 10 dakikada 5.000 işlemdir, bu yüzden aralığı kısıtlamaz. `day_range` üst sınırı henüz kontrol edilecek.
+- **Ingest sıklığı:** 15-30 dakikada bir ile başla, yakın zaman penceresini çek ve tekrar kaydı dedup ile engelle. Gerçek çağrıyla doğrulandı: FIRMS limiti 10 dakikada 5.000 işlemdir, bu yüzden aralığı kısıtlamaz. `day_range` üst sınırı istek başına 5 gündür (6 ve üstü HTTP 400 döner). Daha eski veri için başlangıç tarihi parametresi gerekir; ihtiyaç olunca doğrulanacak.
 - **FIRMS kaynakları:** `VIIRS_SNPP_NRT` ve `MODIS_NRT` ile başla. `VIIRS_NOAA20_NRT` ve `VIIRS_NOAA21_NRT` erken eklenmeli; her uydu farklı saatlerde geçer ve birlikte daha sık gözlem sağlarlar.
 - **Risk güncelleme:** Bağımsız bir komut (`python -m kivilcim.risk`) ingest'ten sonra saatlik çalışır, son tespitleri kümeler ve her küme için riski hesaplar. Nokta sorguları (`/weather`, `/risk`) Open-Meteo'yu istek anında, ~0,1°'ye (yaklaşık 11 km) yuvarlanmış koordinat anahtarlı ve 30-60 dakika TTL'li bir önbellek üzerinden çağırır. İki yol aynı önbellekteki hava verisini paylaşır.
 - **Zaman dilimi:** API her zaman UTC kullanır. Arayüz saatleri `Europe/Istanbul` olarak gösterir.
@@ -380,6 +381,7 @@ Her yanıtta `data_as_of` alanı ve kısa bir `disclaimer` alanı bulunur (resmi
 **Aşama 1.5: Tekrarlayan sıcak nokta işaretleme**
 - Biriken tespit geçmişiyle sabit ısı kaynaklarını (fabrika, rafineri) işaretle
 - `/fires` içinde ayrı gösterilir, sessizce silinmez
+- Durum: ertelendi. Haftalar-aylar süren geçmiş gerekir, 5 günlük istek penceresi bunu veremez. Düzenli ingest ile tespitler birikmeye devam eder; bu aşama başlayınca geçmiş, FIRMS arşivinden tarihe göre doldurulur. N ve X o zaman gerçek veriden seçilir
 
 **Aşama 2: Hava ve risk indeksi**
 - Sadeleştirilmiş formül mü tam Kanada FWI mı karara bağla (bkz. bölüm 9)

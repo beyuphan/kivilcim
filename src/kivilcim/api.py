@@ -5,9 +5,11 @@ Start with: uvicorn kivilcim.api:create_app --factory
 
 from collections.abc import Callable, Iterator
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Literal
 
 from fastapi import Depends, FastAPI, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -16,6 +18,8 @@ from kivilcim.config import get_settings
 from kivilcim.db import init_db, make_engine, make_session_factory
 from kivilcim.geo import bounding_box, haversine_km
 from kivilcim.models import FireDetection, IngestRun
+
+STATIC_DIR = Path(__file__).parent / "static"
 
 DISCLAIMER = (
     "Kıvılcım is not an official warning system. Satellite detections can be delayed "
@@ -162,6 +166,10 @@ def create_app(
     def get_session() -> Iterator[Session]:
         with session_factory() as session:
             yield session
+
+    @app.get("/", include_in_schema=False)
+    def index() -> FileResponse:
+        return FileResponse(STATIC_DIR / "index.html")
 
     @app.get("/health")
     def health() -> dict[str, str]:

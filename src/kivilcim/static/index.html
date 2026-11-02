@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kıvılcım</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #ffffff; --text: #1f2328; --muted: #5b6470; --line: #dcdad4;
+    --fresh: #15803d; --warning: #b45309; --stale: #b91c1c; --unknown: #5b6470;
+    --high: #b91c1c; --nominal: #ea580c; --low: #6b7280;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14161a; --panel: #1d2026; --text: #e8e6e1; --muted: #9aa3ad; --line: #343942; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 12px 16px 8px; }
+  h1 { margin: 0; font-size: 20px; }
+  .tagline { color: var(--muted); font-size: 13px; }
+  .disclaimer { margin: 8px 16px; padding: 8px 12px; border: 1px solid var(--line);
+                border-left: 4px solid var(--stale); background: var(--panel); font-size: 13px; }
+  .status { margin: 8px 16px; padding: 10px 12px; background: var(--panel);
+            border: 1px solid var(--line); border-radius: 6px; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; color: #fff;
+           font-size: 12px; font-weight: 600; margin-right: 6px; }
+  .badge.fresh { background: var(--fresh); } .badge.warning { background: var(--warning); }
+  .badge.stale { background: var(--stale); } .badge.unknown { background: var(--unknown); }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 8px 16px; }
+  .controls label { font-size: 13px; color: var(--muted); }
+  select, button { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;
+                   background: var(--panel); color: var(--text); }
+  button { cursor: pointer; }
+  #map { height: 55vh; min-height: 320px; margin: 0 16px; border: 1px solid var(--line); border-radius: 6px; }
+  .hint { margin: 6px 16px; font-size: 13px; color: var(--muted); }
+  #summary { margin: 10px 16px 4px; font-weight: 600; }
+  #notice { margin: 4px 16px; font-size: 14px; }
+  table { border-collapse: collapse; width: calc(100% - 32px); margin: 8px 16px 24px; font-size: 13px;
+          background: var(--panel); }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; }
+  .conf { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; }
+  .conf.high { background: var(--high); } .conf.nominal { background: var(--nominal); }
+  .conf.low { background: transparent; border: 2px solid var(--low); }
+  .table-wrap { overflow-x: auto; }
+  footer { margin: 0 16px 24px; font-size: 12px; color: var(--muted); }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Kıvılcım</h1>
+  <div class="tagline">NASA FIRMS uydu verisiyle yakınındaki yangın tespitleri</div>
+</header>
+
+<div class="disclaimer">
+  <strong>Resmi bir uyarı sistemi değildir.</strong> Uydu tespitleri gecikmeli olabilir ve yanlış pozitif içerebilir.
+  Acil durumda <strong>112</strong>'yi arayın ve <strong>AFAD</strong> ile iletişime geçin.
+</div>
+
+<div class="status" id="status">Veri durumu yükleniyor…</div>
+
+<div class="controls">
+  <button id="locate" type="button">Konumumu kullan</button>
+  <label>Yarıçap
+    <select id="radius">
+      <option value="10">10 km</option><option value="25">25 km</option><option value="50">50 km</option>
+      <option value="100">100 km</option><option value="250">250 km</option><option value="500" selected>500 km</option>
+    </select>
+  </label>
+  <label>Zaman aralığı
+    <select id="since">
+      <option value="6">Son 6 saat</option><option value="24">Son 24 saat</option>
+      <option value="48" selected>Son 48 saat</option><option value="168">Son 7 gün</option>
+    </select>
+  </label>
+</div>
+
+<div class="hint">Haritaya tıklayarak konum seçin. Gösterilen alan, seçili noktanın çevresindeki dairedir.</div>
+<div id="map"></div>
+<div id="summary"></div>
+<div id="notice"></div>
+<div class="table-wrap">
+  <table id="list" hidden>
+    <thead><tr><th>Mesafe</th><th>Gözlem zamanı (İstanbul)</th><th>Güven</th><th>Uydu</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<footer>
+  Yangın verisi: <a href="https://firms.modaps.eosdis.nasa.gov/">NASA FIRMS</a>.
+  Harita: © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> katkıda bulunanlar.
+  Her nokta uydunun o anki gözlemidir; "şu an yanıyor" anlamına gelmez.
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+const SATELLITES = { N: "Suomi NPP", N20: "NOAA-20", N21: "NOAA-21", Terra: "Terra", Aqua: "Aqua" };
+const CONF_LABEL = { high: "yüksek", nominal: "orta", low: "düşük" };
+const CONF_COLOR = { high: "#b91c1c", nominal: "#ea580c", low: "#6b7280" };
+const FRESHNESS = {
+  fresh:   ["Güncel", "Servis veriyi son 3 saat içinde güncelledi."],
+  warning: ["Gecikmiş", "Servis veriyi en son 3-6 saat önce güncelledi."],
+  stale:   ["Eski", "Servis veriyi 6 saatten uzun süredir güncelleyemedi. Bilgiler eski olabilir."],
+  unknown: ["Bilinmiyor", "Veri güncellemesi doğrulanamıyor."],
+};
+const fmt = new Intl.DateTimeFormat("tr-TR", {
+  timeZone: "Europe/Istanbul", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+});
+
+const $ = (id) => document.getElementById(id);
+const map = L.map("map").setView([39, 35], 6);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 18, attribution: "© OpenStreetMap",
+}).addTo(map);
+const layer = L.layerGroup().addTo(map);
+let point = { lat: 39, lon: 35 };
+let requestId = 0;
+
+function ago(minutes) {
+  const m = Math.max(0, Math.round(minutes));
+  if (m < 60) return m + " dk önce";
+  if (m < 1440) return Math.floor(m / 60) + " sa " + (m % 60) + " dk önce";
+  return Math.floor(m / 1440) + " gün önce";
+}
+function agoFromIso(iso) {
+  return ago((Date.now() - new Date(iso).getTime()) / 60000);
+}
+function el(tag, text, className) {
+  const node = document.createElement(tag);
+  if (text !== undefined) node.textContent = text;
+  if (className) node.className = className;
+  return node;
+}
+function satelliteName(f) { return (SATELLITES[f.satellite] || f.satellite) + " · " + f.instrument; }
+
+function renderStatus(d) {
+  const [label, explanation] = FRESHNESS[d.freshness] || FRESHNESS.unknown;
+  const box = $("status");
+  box.replaceChildren(el("span", label, "badge " + d.freshness), document.createTextNode(explanation));
+  const lines = [];
+  lines.push(d.last_ingest_at
+    ? "Son başarılı güncelleme: " + fmt.format(new Date(d.last_ingest_at)) + " (" + agoFromIso(d.last_ingest_at) + ")"
+    : "Henüz başarılı bir güncelleme kaydı yok.");
+  lines.push(d.latest_observation_at
+    ? "Son uydu gözlemi: " + fmt.format(new Date(d.latest_observation_at)) + " (" + agoFromIso(d.latest_observation_at) + "). Uydular bölgeden günde birkaç kez geçer; saatlerce gözlem olmaması normaldir."
+    : "Veride henüz uydu gözlemi yok.");
+  for (const line of lines) { box.appendChild(el("div", line)); box.lastChild.style.fontSize = "13px"; }
+}
+
+function popupFor(f) {
+  const box = document.createElement("div");
+  box.appendChild(el("strong", "Uydu gözlemi"));
+  const rows = [
+    ["Gözlendi", fmt.format(new Date(f.acquired_at)) + " (" + ago(f.age_minutes) + ")"],
+    ["Uydu", satelliteName(f)],
+    ["Güven", CONF_LABEL[f.confidence_level] || f.confidence_level],
+    ["Mesafe", f.distance_km.toFixed(1) + " km"],
+  ];
+  if (f.frp != null) rows.push(["Isı gücü (FRP)", f.frp + " MW"]);
+  for (const [k, v] of rows) box.appendChild(el("div", k + ": " + v));
+  return box;
+}
+
+function render(data) {
+  layer.clearLayers();
+  const radiusKm = data.query.radius_km;
+  L.marker([point.lat, point.lon]).addTo(layer);
+  L.circle([point.lat, point.lon], {
+    radius: radiusKm * 1000, color: "#2563eb", weight: 1, fillOpacity: 0.04, interactive: false,
+  }).addTo(layer);
+
+  const all = data.fires.concat(data.low_confidence).sort((a, b) => a.distance_km - b.distance_km);
+  for (const f of all) {
+    const low = f.confidence_level === "low";
+    L.circleMarker([f.latitude, f.longitude], {
+      radius: 7, color: CONF_COLOR[f.confidence_level] || "#444", weight: low ? 2 : 1,
+      fillColor: CONF_COLOR[f.confidence_level] || "#444", fillOpacity: low ? 0.1 : 0.75,
+    }).bindPopup(popupFor(f)).addTo(layer);
+  }
+
+  const hours = data.query.since_hours;
+  $("summary").textContent = data.count + " uydu tespiti (son " + hours + " saat, " + radiusKm + " km çevresinde)"
+    + (data.low_confidence.length ? " · " + data.low_confidence.length + " tanesi düşük güvenli" : "");
+  const notice = $("notice");
+  if (data.count === 0) {
+    notice.textContent = "Bu alanda seçili sürede uydu tespiti yok. Bu, yangın olmadığı anlamına gelmez: "
+      + "uydular her an gözlem yapmaz ve bazı yangınları göremeyebilir.";
+  } else {
+    notice.textContent = "Noktalar uydunun gözlem anını gösterir. Düşük güvenli tespitler içi boş çemberle gösterilir.";
+  }
+
+  const body = $("list").querySelector("tbody");
+  body.replaceChildren();
+  for (const f of all.slice(0, 100)) {
+    const tr = document.createElement("tr");
+    tr.appendChild(el("td", f.distance_km.toFixed(1) + " km"));
+    tr.appendChild(el("td", fmt.format(new Date(f.acquired_at)) + " (" + ago(f.age_minutes) + ")"));
+    const conf = el("td");
+    conf.appendChild(el("span", "", "conf " + f.confidence_level));
+    conf.appendChild(document.createTextNode(CONF_LABEL[f.confidence_level] || f.confidence_level));
+    tr.appendChild(conf);
+    tr.appendChild(el("td", satelliteName(f)));
+    body.appendChild(tr);
+  }
+  $("list").hidden = all.length === 0;
+  renderStatus(data.data_as_of);
+}
+
+async function load() {
+  const id = ++requestId;
+  const params = new URLSearchParams({
+    lat: point.lat.toFixed(5), lon: point.lon.toFixed(5),
+    radius_km: $("radius").value, since_hours: $("since").value,
+  });
+  $("notice").textContent = "Yükleniyor…";
+  try {
+    const response = await fetch("/fires?" + params);
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json();
+    if (id === requestId) render(data);
+  } catch (error) {
+    if (id !== requestId) return;
+    $("notice").textContent = "Veri alınamadı (" + error.message + "). Gösterilen bilgi güncel olmayabilir.";
+  }
+}
+
+map.on("click", (e) => { point = { lat: e.latlng.lat, lon: e.latlng.lng }; load(); });
+$("radius").addEventListener("change", load);
+$("since").addEventListener("change", load);
+$("locate").addEventListener("click", () => {
+  if (!navigator.geolocation) { $("notice").textContent = "Tarayıcınız konum özelliğini desteklemiyor."; return; }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      point = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      $("radius").value = "50";
+      map.setView([point.lat, point.lon], 9);
+      load();
+    },
+    () => { $("notice").textContent = "Konum alınamadı. Haritaya tıklayarak konum seçebilirsiniz."; },
+  );
+});
+
+load();
+</script>
+</body>
+</html>

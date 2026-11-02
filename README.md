@@ -53,7 +53,7 @@ Run the FIRMS ingest job (needs `FIRMS_MAP_KEY` in `.env`; run it from a schedul
 python -m kivilcim.ingest
 ```
 
-Start the API, then open http://127.0.0.1:8000/docs for the interactive documentation:
+Start the server, then open http://127.0.0.1:8000/ for the map (click the map to choose a location) or http://127.0.0.1:8000/docs for the interactive API documentation:
 
 ```bash
 uvicorn kivilcim.api:create_app --factory
