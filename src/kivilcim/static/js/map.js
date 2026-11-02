@@ -1,7 +1,7 @@
 // The map and the layers drawn on it. Markers are drawn on one canvas, so hundreds of them cost
 // about as much as a few; the base tiles are only requested when the map stops moving.
 
-import { cssVar } from "./ui.js";
+import { cssVar, el, fmt } from "./ui.js";
 
 export const TURKEY = [[35.8, 25.6], [42.2, 44.9]];
 const BLANK_TILE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
@@ -63,6 +63,35 @@ export function flyTo(lat, lon, zoom) {
   const center = map.unproject([target.x + shift[0], target.y + shift[1]], zoom);
   if (reduce) map.setView(center, zoom, { animate: false });
   else map.flyTo(center, zoom, { duration: 0.8 });
+}
+
+// ---- the live satellite layer ----------------------------------------------------------------------
+
+const DAILY = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/{date}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg";
+
+/**
+ * A switch between the street map and yesterday's satellite picture of the whole region (250 m).
+ * It is what lets you tell cloud from smoke yourself: cloud is white and thick, smoke is a thin gray
+ * or brown streak. Yesterday, because today's picture is only complete late in the day.
+ */
+export function addBaseSwitch(mapwrap) {
+  const date = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  let satellite = null;
+  const note = el("small", { hidden: true }, `Dünkü uydu görüntüsü (${fmt.shortDay(date)}, 250 m). Beyaz ve kalın olan bulut, ince gri-kahverengi şerit duman olabilir.`);
+  const buttons = [["map", "Harita"], ["sat", "Uydu"]].map(([key, text]) =>
+    el("button", { type: "button", "aria-pressed": String(key === "map"), onclick: () => choose(key) }, text));
+  const card = el("div", { class: "map-card map-toggle" }, el("div", { class: "segmented", role: "group", "aria-label": "Harita türü" }, buttons), note);
+  mapwrap.append(card);
+
+  function choose(key) {
+    buttons.forEach((b, i) => b.setAttribute("aria-pressed", String(i === (key === "map" ? 0 : 1))));
+    note.hidden = key === "map";
+    if (key === "sat" && !satellite) {
+      satellite = L.tileLayer(DAILY.replace("{date}", date), { maxNativeZoom: 9, maxZoom: 18, updateWhenIdle: true, opacity: 1, zIndex: 1 });
+    }
+    if (key === "sat") satellite.addTo(map);
+    else if (satellite) map.removeLayer(satellite);
+  }
 }
 
 // ---- colors from the design tokens ----------------------------------------------------------------

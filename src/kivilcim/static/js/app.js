@@ -3,7 +3,7 @@
 
 import { $, el, clear, announce, agoFrom, fmt } from "./ui.js";
 import { api } from "./api.js";
-import { createMap, getMap } from "./map.js";
+import { createMap, getMap, addBaseSwitch } from "./map.js";
 import { createSearch } from "./search.js";
 import { initSheet } from "./sheet.js";
 
@@ -16,6 +16,7 @@ const sheet = initSheet(panel, $("#sheet-handle"));
 createMap($("#map"), config);
 const map = getMap();
 const layer = L.layerGroup().addTo(map);
+addBaseSwitch(mapwrap);
 
 // ---- search box ------------------------------------------------------------------------------
 
@@ -42,6 +43,7 @@ const modules = {};
 
 function route(url) {
   const path = url.pathname.replace(/\/+$/, "") || "/";
+  if (path === "/check") return { name: "check", module: "check", nav: "check", params: url.searchParams };
   if (path === "/history") return { name: "history", module: "history", nav: "history" };
   const event = path.match(/^\/history\/([^/]+)$/);
   if (event) return { name: "event", module: "event", nav: "history", params: { id: decodeURIComponent(event[1]) } };

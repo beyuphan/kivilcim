@@ -3,6 +3,23 @@
 All notable changes. The format follows [Keep a Changelog](https://keepachangelog.com/) and the
 project uses [semantic versioning](https://semver.org/).
 
+## [0.3.0] - 2026-11-03
+
+### Added
+- **"Did it burn?" (`/check`)**: the 30 m satellite image from before and after a fire at any place in
+  Turkey, for dates the person enters. The dates are suggested from the strong detections near the place
+  (`GET /imagery/suggest`); the images come from `GET /imagery/place`, which uses the same cloud-free
+  search as the past fires, rounds the place to about 1 km and keeps the result for a month.
+- **My places**: places saved in the browser only, shown on the home page with what was seen within 10 km
+  in the last 24 hours.
+- **Harita/Uydu switch**: yesterday's 250 m VIIRS picture of the region on the map, to tell cloud from
+  smoke.
+- Home page tiles for the two main questions, a "Yerim yandı mı?" button and "Yerlerime ekle" on a place.
+- A "Who it is for, and why use it" section in the README.
+
+### Changed
+- The before/after panel is one shared component for past fires and place checks.
+
 ## [0.2.2] - 2026-11-03
 
 ### Fixed

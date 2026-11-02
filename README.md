@@ -13,6 +13,27 @@ code are in English, and [PLAN.md](PLAN.md) is bilingual.
 
 ![The map: active detection zones across Turkey, coloured by the weather index](docs/screenshots/home.png)
 
+## Who it is for, and why use it
+
+NASA's own FIRMS site shows the same detections, but as raw dots with English terms, and the forest
+service's tools are made for firefighters. Kıvılcım is made for **people who live, farm or holiday near
+wooded land** and want a plain answer in Turkish, and for **people who need to see what a fire did**:
+
+- **"Is there a fire near me?"** Search a district or use your location: the detections within a radius,
+  how old they are, and how old the data itself is. The answer says what it cannot know (a satellite passes a
+  few times a day, small fires are missed).
+- **"My places."** Save the village house, the field, the summer cottage. The home page shows each one with
+  what the satellites saw within 10 km in the last day. The list stays in your browser; there are no accounts.
+- **"Did it burn?"** Give any place and the dates of a fire and see the 30 m satellite image from before
+  and from after, side by side, with clouds filtered out. Burn scars show as dark brown. Useful for owners,
+  villagers, insurers' first look, journalists and volunteers. The dates are suggested from what the
+  satellites saw nearby.
+- **"Is that smoke or cloud?"** A Harita/Uydu switch puts yesterday's satellite picture of the whole region
+  on the map, so you can tell for yourself.
+- **Past fires** with the same before and after, to see how big fires of this season really were.
+
+It is **not** an alarm: data arrives hours late and some fires never show. It does not replace 112.
+
 ## What it does
 
 - **Active zones across Turkey.** The detections of the last day, grouped by place, on a map. The colour

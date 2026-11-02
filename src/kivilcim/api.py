@@ -19,7 +19,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from kivilcim import __version__
@@ -245,6 +245,19 @@ class EventImageryResponse(BaseModel):
     note: str
     disclaimer: str
 
+
+class FireSuggestion(BaseModel):
+    found: bool
+    start: date | None = None
+    end: date | None = None
+    detections: int = 0
+    max_frp_mw: float = 0.0
+
+
+TURKEY_MIN_LAT, TURKEY_MAX_LAT = 35.5, 42.5
+TURKEY_MIN_LON, TURKEY_MAX_LON = 25.5, 45.0
+FIRST_IMAGE_DAY = date(2016, 1, 1)  # the 30 m archive reaches back to about 2015
+MAX_CHECK_DAYS = 120
 
 IMAGERY_NOTE = (
     "The nearest clear satellite images before the first and after the last detection. They are from "
@@ -537,9 +550,10 @@ def create_app(
             headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"},
         )
 
+    @app.get("/check", include_in_schema=False)
     @app.get("/history", include_in_schema=False)
     @app.get("/history/{event_id}", include_in_schema=False)
-    def history(event_id: str | None = None) -> HTMLResponse:
+    def history(event_id: str | None = None) -> HTMLResponse:  # also /check
         return render_page("index.html")
 
     @app.get("/methodology", include_in_schema=False)
@@ -842,32 +856,32 @@ def create_app(
 
     imagery_lock = threading.Lock()
 
-    def last_activity(session: Session, event: Event) -> date:
-        """The last day a fire of some strength was seen near the center of the event. Fires often go
-        on after the event as it was grouped (its length is capped), and an "after" image should be
-        taken once they are out. Only the area the image shows counts, only detections of at least
-        5 MW (the weakest are crop burning and noise), and only up to two weeks past the event, so
-        a place that burns all season still gets an image."""
-        first = datetime(event.start.year, event.start.month, event.start.day, tzinfo=timezone.utc)
-        limit = datetime(event.end.year, event.end.month, event.end.day, tzinfo=timezone.utc) + timedelta(days=15)
+    def last_activity(session: Session, lat: float, lon: float, start: date, end: date) -> date:
+        """The last day a fire of some strength was seen near a place. Fires often go on after an event
+        as it was grouped (its length is capped), and an "after" image should be taken once they are
+        out. Only the area the image shows counts, only detections of at least 5 MW (the weakest are
+        crop burning and noise), and only up to two weeks past `end`, so a place that burns all
+        season still gets an image."""
+        first = datetime(start.year, start.month, start.day, tzinfo=timezone.utc)
+        limit = datetime(end.year, end.month, end.day, tzinfo=timezone.utc) + timedelta(days=15)
         last = session.scalar(
             select(func.max(FireDetection.acquired_at)).where(
-                FireDetection.latitude.between(event.center_lat - 0.12, event.center_lat + 0.12),
-                FireDetection.longitude.between(event.center_lon - 0.15, event.center_lon + 0.15),
+                FireDetection.latitude.between(lat - 0.12, lat + 0.12),
+                FireDetection.longitude.between(lon - 0.15, lon + 0.15),
                 FireDetection.acquired_at >= first,
                 FireDetection.acquired_at < limit,
                 FireDetection.confidence_level != "low",
                 FireDetection.frp >= 5,
             )
         )
-        return max(event.end, last.date()) if last else event.end
+        return max(end, last.date()) if last else end
 
-    def imagery_for(session: Session, event: Event) -> dict:
-        """The stored image choice for an event, searched and stored first if there is none yet."""
+    def imagery_for(session: Session, key: str, lat: float, lon: float, start: date, end: date) -> dict:
+        """The stored image choice for a place and dates, searched and stored first if there is none yet."""
         now = clock()
 
         def stored() -> dict | None:
-            row = session.get(EventImagery, event.id)
+            row = session.get(EventImagery, key)
             if row and (now - row.computed_at).total_seconds() < row.ttl_seconds:
                 payload = json.loads(row.payload)
                 if payload.get("v") == IMAGERY_VERSION:
@@ -883,11 +897,10 @@ def create_app(
             if payload is not None:
                 return payload
             payload = find_before_after(
-                event.center_lat, event.center_lon, event.start, event.end, now.date(),
-                quiet_from=last_activity(session, event),
+                lat, lon, start, end, now.date(), quiet_from=last_activity(session, lat, lon, start, end)
             )
             payload["v"] = IMAGERY_VERSION
-            both_clear = all(payload[s] and payload[s]["quality"] == "clear" for s in ("before", "after"))
+            both_clear = all(payload[side] and payload[side]["quality"] == "clear" for side in ("before", "after"))
             nothing = payload["before"] is None and payload["after"] is None
             if payload["incomplete"] or nothing:
                 ttl = IMAGERY_FAILED_SECONDS
@@ -897,9 +910,30 @@ def create_app(
                 ttl = IMAGERY_FINAL_SECONDS
             else:
                 ttl = IMAGERY_RETRY_SECONDS
-            session.merge(EventImagery(event_id=event.id, computed_at=now, ttl_seconds=ttl, payload=json.dumps(payload)))
+            if key.startswith("p"):  # searches for places people typed in are kept for a month only
+                session.execute(
+                    delete(EventImagery).where(
+                        EventImagery.event_id.like("p%"), EventImagery.computed_at < now - timedelta(days=30)
+                    )
+                )
+            session.merge(EventImagery(event_id=key, computed_at=now, ttl_seconds=ttl, payload=json.dumps(payload)))
             session.commit()
             return payload
+
+    def imagery_response(key: str, payload: dict, response: Response) -> EventImageryResponse:
+        response.headers["Cache-Control"] = "public, max-age=300"
+        return EventImageryResponse(
+            event_id=key,
+            before=payload["before"],
+            after=payload["after"],
+            low_resolution=payload["low_resolution"],
+            before_options=payload.get("before_options", []),
+            after_options=payload.get("after_options", []),
+            waiting=payload.get("waiting", False),
+            attribution=payload["attribution"],
+            note=IMAGERY_NOTE,
+            disclaimer=DISCLAIMER,
+        )
 
     @app.get("/events/{event_id}/imagery", response_model=EventImageryResponse)
     def event_imagery(
@@ -913,19 +947,59 @@ def create_app(
         event = next((e for e in all_events(session) if e.id == event_id), None)
         if event is None:
             raise HTTPException(status_code=404, detail="Event not found.")
-        payload = imagery_for(session, event)
-        response.headers["Cache-Control"] = "public, max-age=300"
-        return EventImageryResponse(
-            event_id=event_id,
-            before=payload["before"],
-            after=payload["after"],
-            low_resolution=payload["low_resolution"],
-            before_options=payload.get("before_options", []),
-            after_options=payload.get("after_options", []),
-            waiting=payload.get("waiting", False),
-            attribution=payload["attribution"],
-            note=IMAGERY_NOTE,
-            disclaimer=DISCLAIMER,
+        payload = imagery_for(session, event.id, event.center_lat, event.center_lon, event.start, event.end)
+        return imagery_response(event_id, payload, response)
+
+    @app.get("/imagery/place", response_model=EventImageryResponse)
+    def place_imagery(
+        response: Response,
+        lat: float = Query(ge=TURKEY_MIN_LAT, le=TURKEY_MAX_LAT),
+        lon: float = Query(ge=TURKEY_MIN_LON, le=TURKEY_MAX_LON),
+        start: date = Query(description="First day of the fire (or the day it was noticed)"),
+        end: date | None = Query(default=None, description="Last day of the fire; the start day if omitted"),
+        session: Session = Depends(get_session),
+    ) -> EventImageryResponse:
+        """Satellite images from before and after a fire at any place in Turkey, for checking whether
+        a house, field or forest burned. Taken the same way as for the past fires on the map."""
+        end = end or start
+        today = clock().date()
+        if start < FIRST_IMAGE_DAY or end < start or end > today or (end - start).days > MAX_CHECK_DAYS:
+            raise HTTPException(status_code=422, detail="The dates must be between 2016 and today, start before end, at most 120 days apart.")
+        lat, lon = round(lat, 2), round(lon, 2)  # about 1 km: keeps stored searches shared and places vague
+        key = f"p{lat}_{lon}_{start}_{end}"
+        payload = imagery_for(session, key, lat, lon, start, end)
+        return imagery_response(key, payload, response)
+
+    @app.get("/imagery/suggest", response_model=FireSuggestion)
+    def suggest_dates(
+        lat: float = Query(ge=TURKEY_MIN_LAT, le=TURKEY_MAX_LAT),
+        lon: float = Query(ge=TURKEY_MIN_LON, le=TURKEY_MAX_LON),
+        session: Session = Depends(get_session),
+    ) -> FireSuggestion:
+        """The dates of the latest fire the satellites saw near a place (within about 15 km, strong
+        detections only, last 120 days), to fill in the dates of a check. A gap of five quiet days
+        starts a new fire."""
+        since = clock() - timedelta(days=MAX_CHECK_DAYS)
+        rows = session.execute(
+            select(FireDetection.acquired_at, FireDetection.frp).where(
+                FireDetection.latitude.between(lat - 0.14, lat + 0.14),
+                FireDetection.longitude.between(lon - 0.18, lon + 0.18),
+                FireDetection.acquired_at >= since,
+                FireDetection.confidence_level != "low",
+                FireDetection.frp >= 5,
+            )
+        ).all()
+        days = sorted({r.acquired_at.date() for r in rows})
+        if not days:
+            return FireSuggestion(found=False)
+        start = end = days[-1]
+        for day in reversed(days[:-1]):
+            if (start - day).days > 5:
+                break
+            start = day
+        inside = [r for r in rows if start <= r.acquired_at.date() <= end]
+        return FireSuggestion(
+            found=True, start=start, end=end, detections=len(inside), max_frp_mw=max(r.frp for r in inside)
         )
 
     warm_state = {"running": False}
@@ -941,7 +1015,7 @@ def create_app(
                 big = sorted((e for e in all_events(session) if e.in_turkey), key=lambda e: -e.total_frp)[:limit]
                 for event in big:
                     try:
-                        imagery_for(session, event)
+                        imagery_for(session, event.id, event.center_lat, event.center_lon, event.start, event.end)
                     except Exception:
                         log.exception("could not search the images of %s", event.id)
         finally:

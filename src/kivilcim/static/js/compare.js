@@ -20,6 +20,7 @@ export function createCompare(map, mapwrap, imagery, { onReady = () => {} } = {}
     minZoom: 5,
     updateWhenIdle: true,
     keepBuffer: 1,
+    zIndex: 5, // above the street map and the daily satellite layer
     attribution: imagery.attribution,
   });
 

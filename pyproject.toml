@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kivilcim"
-version = "0.2.2"  # keep in step with kivilcim/__init__.py (a test checks it)
+version = "0.3.0"  # keep in step with kivilcim/__init__.py (a test checks it)
 description = "Wildfire monitoring service built on NASA FIRMS satellite data"
 readme = "README.md"
 requires-python = ">=3.11"

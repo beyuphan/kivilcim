@@ -674,3 +674,56 @@ def test_a_choice_stored_by_an_older_version_is_searched_again(session_factory):
         s.commit()
     body = client.get(f"/events/{event_id}/imagery").json()
     assert requests and body["before"]["date"] == "2026-09-05"
+
+
+# ---- checking any place -----------------------------------------------------
+
+
+@respx.mock
+def test_any_place_can_be_checked_for_the_images_before_and_after_a_fire(session_factory):
+    respx.route(**GIBS).mock(side_effect=archive(clear_days={"2026-09-05", "2026-09-13"}))
+    client = make_client(session_factory)
+    body = client.get("/imagery/place", params={"lat": 37.4537, "lon": 35.4549, "start": "2026-09-07", "end": "2026-09-09"}).json()
+    assert body["before"]["date"] == "2026-09-05" and body["after"]["date"] == "2026-09-13"
+    assert body["event_id"].startswith("p37.45_35.45_")  # coordinates are rounded to about a kilometer
+
+
+@respx.mock
+def test_a_check_is_stored_and_not_searched_again(session_factory):
+    requests = []
+    respx.route(**GIBS).mock(side_effect=archive(clear_days={"2026-09-05", "2026-09-13"}, requests=requests))
+    client = make_client(session_factory)
+    params = {"lat": 37.45, "lon": 35.45, "start": "2026-09-07", "end": "2026-09-09"}
+    first = client.get("/imagery/place", params=params).json()
+    made = len(requests)
+    assert client.get("/imagery/place", params={**params, "lat": 37.4549}).json() == first  # same kilometer
+    assert len(requests) == made
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"lat": 37.45, "lon": 35.45, "start": "2015-01-01"},  # before the archive
+        {"lat": 37.45, "lon": 35.45, "start": "2026-12-01"},  # in the future
+        {"lat": 37.45, "lon": 35.45, "start": "2026-09-09", "end": "2026-09-07"},  # backwards
+        {"lat": 37.45, "lon": 35.45, "start": "2026-01-01", "end": "2026-09-01"},  # far too long
+        {"lat": 10.0, "lon": 35.45, "start": "2026-09-07"},  # outside Turkey
+    ],
+)
+def test_checks_with_unusable_places_or_dates_are_refused(session_factory, params):
+    assert make_client(session_factory).get("/imagery/place", params=params).status_code == 422
+
+
+def test_the_latest_fire_near_a_place_suggests_the_dates(session_factory):
+    seed_event(session_factory)  # 7 to 9 September at 37.45, 35.45
+    client = TestClient(create_app(session_factory, now=lambda: datetime(2026, 9, 20, tzinfo=UTC), settings=Settings(_env_file=None)))
+    body = client.get("/imagery/suggest", params={"lat": 37.46, "lon": 35.46}).json()
+    assert body["found"] is True and body["start"] == "2026-09-07" and body["end"] == "2026-09-09"
+    assert body["detections"] > 0 and body["max_frp_mw"] == 150.0
+    far = client.get("/imagery/suggest", params={"lat": 39.9, "lon": 32.85}).json()
+    assert far["found"] is False
+
+
+def test_the_check_page_is_the_app_shell(session_factory):
+    client = make_client(session_factory)
+    assert client.get("/check").text == client.get("/").text

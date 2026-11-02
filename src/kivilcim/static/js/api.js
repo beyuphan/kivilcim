@@ -39,5 +39,10 @@ export const api = {
   events: (signal) => getJSON("/events?limit=100", { signal, ttl: 60_000 }),
   event: (id, signal) => getJSON(`/events/${encodeURIComponent(id)}?days_before=2&days_after=5&padding_deg=0.05`, { signal, ttl: 300_000 }),
   imagery: (id, signal) => getJSON(`/events/${encodeURIComponent(id)}/imagery`, { signal, ttl: 300_000 }),
+  /** The dates of the latest strong fire near a place, if any. */
+  suggest: (lat, lon, signal) => getJSON(`/imagery/suggest?${q({ lat: lat.toFixed(3), lon: lon.toFixed(3) })}`, { signal, ttl: 120_000 }),
+  /** Satellite images from before and after a fire at any place. */
+  placeImagery: (lat, lon, start, end, signal) =>
+    getJSON(`/imagery/place?${q({ lat: lat.toFixed(3), lon: lon.toFixed(3), start, end })}`, { signal, ttl: 300_000 }),
   places: (signal) => getJSON("/static/ilceler.json", { signal, ttl: Infinity }),
 };

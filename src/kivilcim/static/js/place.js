@@ -4,6 +4,7 @@ import { api } from "./api.js";
 import { el, clear, icon, fmt, agoFrom, levelPill, FACTORS, CONFIDENCE, satellite, COMPASS, announce } from "./ui.js";
 import { flyTo, getCanvas, levelColor } from "./map.js";
 import { loadIndex, nearestName } from "./search.js";
+import * as saved from "./saved.js";
 
 const HOURS = 24;
 
@@ -25,7 +26,9 @@ export function mount(ctx, params) {
   const verdict = el("div", { class: "card card-pad" }, el("div", { class: "skeleton", style: { height: "60px" } }));
   const weatherBox = el("div", { class: "card card-pad" }, el("div", { class: "skeleton", style: { height: "90px" } }));
   const detail = el("div", { class: "card" });
-  body.append(back(), el("div", { class: "section-title" }, title), verdict, weatherBox, detail);
+  const actions = el("div", { class: "actions" });
+  body.append(back(), el("div", { class: "section-title" }, title), verdict, actions, weatherBox, detail);
+  renderActions();
   ctx.setTitle(name || "Seçilen konum");
 
   layer.clearLayers();
@@ -36,7 +39,7 @@ export function mount(ctx, params) {
 
   if (!name) loadIndex().then((entries) => {
     name = nearestName(entries, lat, lon) || "";
-    if (name) { title.textContent = name; ctx.setTitle(name); }
+    if (name) { title.textContent = name; ctx.setTitle(name); renderActions(); }
   }).catch(() => {});
 
   Promise.all([api.fires(lat, lon, radius, HOURS, signal), api.weather(lat, lon, signal)]).then(([fires, weather]) => {
@@ -49,6 +52,19 @@ export function mount(ctx, params) {
     clear(verdict).append(el("p", {}, "Veriler yüklenemedi. Bağlantınızı kontrol edip yeniden deneyin."));
     clear(weatherBox).remove();
   });
+
+  function renderActions() {
+    clear(actions);
+    const keep = saved.has(lat, lon);
+    actions.append(
+      el("a", { class: "btn btn-secondary", href: `/check?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&name=${encodeURIComponent(name)}&auto=1`, "data-link": "" }, icon("layers", 18), "Yerim yandı mı?"),
+      el("button", { class: "btn btn-secondary", type: "button", "aria-pressed": String(keep), onclick: () => {
+        if (keep) saved.remove(lat, lon);
+        else if (!saved.add({ name: name || "Seçilen yer", lat, lon, r: Math.min(radius, 25) })) return announce(`En fazla ${saved.limit} yer kaydedebilirsiniz.`);
+        announce(keep ? "Yerlerimden çıkarıldı" : "Yerlerime eklendi");
+        renderActions();
+      } }, icon(keep ? "check" : "eye", 18), keep ? "Yerlerimde" : "Yerlerime ekle"));
+  }
 
   function back() {
     return el("a", { class: "btn btn-ghost btn-small", href: "/", "data-link": "", style: { alignSelf: "flex-start" } }, icon("arrow-left", 18), "Tüm bölgeler");

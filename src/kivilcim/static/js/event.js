@@ -3,17 +3,14 @@
 import { api } from "./api.js";
 import { el, clear, icon, fmt, announce, sleep } from "./ui.js";
 import { fit, timeColor, getCanvas } from "./map.js";
-import { createCompare, describe } from "./compare.js";
+import { createImagePanel } from "./imagepanel.js";
 import { eventName, eventMeta } from "./history.js";
-
-const QUALITY_TAG = { clear: "Açık", partly_cloudy: "Az bulutlu", cloudy: "Bulutlu", partial: "Kısmi" };
 
 export function mount(ctx, params) {
   const { body, layer, signal, map, mapwrap } = ctx;
   const id = params.id;
-  let compare = null;
   let detail = null;
-  let imagery = null;
+  let panel = null;
   let mode = "satellite";
   let day = 0;
   let playing = false;
@@ -25,9 +22,10 @@ export function mount(ctx, params) {
     el("a", { class: "btn btn-ghost btn-small", href: "/history", "data-link": "", style: { alignSelf: "flex-start" } }, icon("arrow-left", 18), "Geçmiş yangınlar"),
     head, wait);
   ctx.setTitle("Yangın kaydı");
-  ctx.onCleanup(() => { playing = false; compare?.destroy(); });
+  ctx.onCleanup(() => { playing = false; panel?.destroy(); });
 
-  const imageryPromise = api.imagery(id, signal).catch((error) => (error.name === "AbortError" ? null : { error }));
+  const imageryPromise = api.imagery(id, signal);
+  imageryPromise.catch(() => {}); // the panel reports a failure itself
   api.event(id, signal).then(async (data) => {
     detail = data;
     const e = data.event;
@@ -39,10 +37,8 @@ export function mount(ctx, params) {
     showAll();
     fit(L.latLngBounds([[e.bbox[0], e.bbox[1]], [e.bbox[2], e.bbox[3]]]).pad(0.25), { maxZoom: 13 });
     renderSummary();
-    renderImageryPlaceholder();
-    imagery = await imageryPromise;
-    if (signal.aborted) return;
-    renderImagery();
+    panel = createImagePanel(ctx, { box: imageryBox, noteBox, subject: "yangın" });
+    panel.start(imageryPromise, () => api.imagery(id, signal));
   }).catch((error) => {
     if (error.name === "AbortError") return;
     clear(wait).append(el("h3", { class: "card-title" }, error.status === 404 ? "Bu kayıt bulunamadı" : "Kayıt yüklenemedi"),
@@ -83,89 +79,14 @@ export function mount(ctx, params) {
     imageryBox.hidden = value !== "satellite";
     timelineBox.hidden = value !== "spread";
     if (value === "spread") {
-      compare?.destroy();
-      compare = null;
+      panel?.show(false);
       showUpTo(detail.days.length - 1);
     } else {
       playing = false;
       showAll();
-      mountCompare();
+      panel?.show(true);
     }
     announce(value === "spread" ? "Yayılma görünümü" : "Uydu görünümü");
-  }
-
-  function renderImageryPlaceholder() {
-    imageryBox.hidden = false;
-    clear(imageryBox).append(
-      el("p", { class: "card-title" }, "Uydu görüntüleri aranıyor…"),
-      el("p", { class: "card-sub", style: { marginTop: "6px" } }, "Yangından önceki ve sonraki en iyi açık günü buluyoruz. İlk seferde birkaç saniye sürebilir."),
-      el("div", { class: "skeleton", style: { height: "56px", marginTop: "12px" } }));
-  }
-
-  function renderImagery() {
-    clear(imageryBox);
-    if (!imagery || imagery.error) {
-      const limited = imagery?.error?.status === 429;
-      imageryBox.append(
-        el("p", { class: "card-title" }, limited ? "Çok sık istek yapıldı" : "Uydu görüntüleri şu an alınamadı"),
-        el("p", { class: "card-sub", style: { marginTop: "6px" } }, limited ? "Bir dakika sonra sayfayı yenileyin." : "Daha sonra yeniden deneyin."),
-        el("button", { class: "btn btn-secondary btn-small", type: "button", style: { marginTop: "12px" }, onclick: () => { renderImageryPlaceholder(); api.imagery(id, signal).then((d) => { imagery = d; renderImagery(); }).catch((x) => { imagery = { error: x }; renderImagery(); }); } }, icon("refresh", 16), "Yeniden dene"));
-      return;
-    }
-    const { before, after } = imagery;
-    if (!after && imagery.waiting) {
-      imageryBox.append(el("p", { class: "card-sub" }, "Sonrası görüntüsü henüz yok: yangın söndükten sonra dumanın dağılması için birkaç gün beklenir ve uydu görüntüleri 1-2 gün geç yayımlanır. Birkaç gün sonra yeniden bakın."));
-    }
-    if (!before && !after) {
-      imageryBox.append(el("p", { class: "card-title" }, "Bu yangın için kullanılabilir uydu görüntüsü bulunamadı"),
-        el("p", { class: "card-sub", style: { marginTop: "6px" } }, "Bu tarihlerde bulutsuz görüntü yok; bulutlu görüntüleri duman sanılmasın diye göstermiyoruz. Birkaç gün sonra yeniden bakın."));
-      return;
-    }
-    imageryBox.append(
-      el("p", { class: "card-sub" }, "Haritadaki çizgiyi sağa sola sürükleyin. Soldaki yangından önce, sağdaki sonra."),
-      el("div", { class: "compare-cards", style: { marginTop: "12px" } }, side(before, "Öncesi"), side(after, "Sonrası")));
-    for (const [key, list, current] of [["before", imagery.before_options, before], ["after", imagery.after_options, after]]) {
-      if (list?.length > 1) imageryBox.append(dateChips(key, list, current));
-    }
-    if (imagery.low_resolution) {
-      imageryBox.append(el("p", { class: "card-sub", style: { marginTop: "12px" } }, "Bir taraf düşük çözünürlüklü (250 m) günlük görüntü. Bu tarihlerde 30 m çözünürlükte kullanılabilir bir görüntü bulamadık; ayrıntılar bulanık görünebilir."));
-    }
-    noteBox.hidden = false;
-    clear(noteBox).append(el("summary", {}, icon("info", 18), "Bu görüntüler nereden?", icon("chevron-down", 18)),
-      el("div", { class: "body" },
-        el("p", {}, "Yangından önceki ve sonraki en yakın açık günün uydu görüntüleri. Görüntüler yangın anına değil, gösterilen güne aittir; yanık izi silik olabilir, bulut onu gizleyebilir."),
-        el("p", {}, "Kaynak: NASA GIBS / ESDIS (Harmonized Landsat Sentinel-2, VIIRS)."),
-        el("p", {}, "Resmi bir kayıt değildir.")));
-    if (mode === "satellite") mountCompare();
-  }
-
-  // Other usable days for one side. Choosing one swaps the image on the map.
-  function dateChips(key, list, current) {
-    const group = el("div", { class: "chips", role: "group", "aria-label": key === "before" ? "Öncesi için başka gün" : "Sonrası için başka gün", style: { marginTop: "12px" } },
-      el("span", { class: "card-sub", style: { alignSelf: "center" } }, key === "before" ? "Öncesi:" : "Sonrası:"));
-    for (const option of list) {
-      const chip = el("button", { class: "chip", type: "button", "aria-pressed": String(option.date === current?.date), onclick: () => {
-        compare?.swap(key, option);
-        [...group.querySelectorAll(".chip")].forEach((c) => c.setAttribute("aria-pressed", String(c === chip)));
-        const card = imageryBox.querySelectorAll(".compare-card")[key === "before" ? 0 : 1];
-        card?.replaceWith(side(option, key === "before" ? "Öncesi" : "Sonrası"));
-        announce(`${key === "before" ? "Öncesi" : "Sonrası"} görüntüsü: ${fmt.day(option.date)}`);
-      } }, fmt.shortDay(option.date));
-      group.append(chip);
-    }
-    return group;
-  }
-
-  function side(image, label) {
-    if (!image) return el("div", { class: "compare-card" }, el("b", {}, label), el("span", {}, "Bulutsuz görüntü bulunamadı"));
-    return el("div", { class: "compare-card" }, el("b", {}, `${label} · ${fmt.shortDay(image.date)}`), el("span", {}, describe(image)),
-      el("span", { class: "pill pill-plain tag", dataset: { level: image.quality === "clear" ? "low" : image.quality === "cloudy" ? "high" : "moderate" } }, QUALITY_TAG[image.quality] || image.quality));
-  }
-
-  function mountCompare() {
-    if (compare || !imagery || imagery.error || (!imagery.before && !imagery.after)) return;
-    compare = createCompare(map, mapwrap, imagery);
-    layer.eachLayer((l) => l.bringToFront?.());
   }
 
   // ---- the spread view -------------------------------------------------------------------------------

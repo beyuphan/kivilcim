@@ -11,6 +11,7 @@ const ASSET_CACHE = "kivilcim-assets-" + VERSION;
 const SHELL = [
   "/",
   "/history",
+  "/check",
   "/methodology",
   "/manifest.webmanifest",
   "/static/pwa.js",
@@ -28,6 +29,9 @@ const SHELL = [
   "/static/js/history.js",
   "/static/js/event.js",
   "/static/js/compare.js",
+  "/static/js/imagepanel.js",
+  "/static/js/saved.js",
+  "/static/js/check.js",
   "/static/js/methodology.js",
   "/static/vendor/leaflet/leaflet.js",
   "/static/vendor/leaflet/leaflet.css",

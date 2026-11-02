@@ -48,7 +48,7 @@ def bucket_for(path: str) -> str | None:
     """'weather', 'imagery', 'general', or None when the path is exempt."""
     if path in EXEMPT_PATHS or path.startswith(EXEMPT_PREFIXES):
         return None
-    if path.startswith("/events/") and path.endswith("/imagery"):
+    if path == "/imagery/place" or (path.startswith("/events/") and path.endswith("/imagery")):
         return "imagery"
     if any(path == p or path.startswith(p + "/") for p in WEATHER_PATHS):
         return "weather"

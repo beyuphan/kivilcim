@@ -91,6 +91,10 @@ bu bölümün görevidir.</p>
   <li><strong>Sınır:</strong> Görüntüler hafif bulutlu, kısmi ya da yangından günler uzakta olabilir. Her tarafın tarihi, kaynağı, çözünürlüğü ve bulut durumu yazılır. Yanık alan sınırı çizilmez; görüntüye bakıp kendiniz değerlendirirsiniz. Servis yanıt vermezse istek yeniden denenir; yine de eksik kalırsa sonuç kısa süre sonra yeniden aranır.</li>
 </ul>
 
+<h2>"Yerim yandı mı?" ve yerlerim</h2>
+<p>Herhangi bir yerin, yazdığınız tarihlerden önceki ve sonraki uydu görüntüsünü aynı yöntemle yan yana gösterir. Tarihler, o yerin yaklaşık 15 km çevresinde uydunun gördüğü son güçlü yangına göre önerilir; siz değiştirebilirsiniz. Bu bir hasar tespiti değildir: yanık izi görüntüde sizin gözünüzle değerlendirilir, bulut ya da gölge yanık gibi görünebilir. Tarihler 2016'dan bugüne olmalı ve en fazla 120 gün arayla seçilebilir.</p>
+<p>"Yerlerime ekle" ile kaydettiğiniz yerler yalnızca tarayıcınızda saklanır; sunucuda hesap ya da liste yoktur. Ana sayfa açıldığında her yer için son 24 saatte 10 km içinde tespit olup olmadığı sorulur. Uydu katmanı (Harita/Uydu düğmesi) dünün 250 m çözünürlüklü VIIRS görüntüsünü gösterir: kalın beyaz bulut, ince gri-kahverengi şerit duman olabilir.</p>
+
 <h2>Geçmiş yangınlar sayfası</h2>
 <p><a href="/history">Geçmiş yangınlar</a> sayfasındaki olaylar, uydu tespitlerinin güç, yer ve zamana göre otomatik gruplanmasıdır; doğrulanmış olaylar değildir.</p>
 <ul>
@@ -113,7 +117,7 @@ bu bölümün görevidir.</p>
 
 <h2>Gizlilik</h2>
 <p>Hesap, çerez ve izleme yoktur. Bir konum seçtiğinizde ya da "Konumumu kullan"ı tıkladığınızda koordinatlar yalnızca o sorguyu yanıtlamak için sunucuya gönderilir ve
-hava servisine ~11 km'ye yuvarlanmış olarak iletilir; veritabanında kullanıcıya ait bir kayıt tutulmaz. İstek adreslerinde koordinatlar geçtiği için
+hava servisine ~11 km'ye yuvarlanmış olarak iletilir. "Yerim yandı mı?" için sorduğunuz yer yaklaşık 1 km'ye yuvarlanıp seçilen tarihlerle birlikte bir ay boyunca saklanır (aynı aramayı tekrarlamamak için); kim sorduğu kaydedilmez; veritabanında kullanıcıya ait bir kayıt tutulmaz. İstek adreslerinde koordinatlar geçtiği için
 <code>python -m kivilcim</code> varsayılan olarak istek günlüğü tutmaz (<code>--access-log</code> ile açılır). Bir ters vekil sunucunun ya da barındırma
 hizmetinin kendi günlükleri ayrıca koordinat içerebilir; kendi sunucunuzu çalıştırırsanız bunlar sizde kalır.</p>
 

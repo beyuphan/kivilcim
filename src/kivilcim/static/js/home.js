@@ -4,6 +4,8 @@ import { api } from "./api.js";
 import { el, clear, icon, fmt, levelPill, LEVELS, FACTORS, agoFrom, ago, announce } from "./ui.js";
 import { levelColor, fit, TURKEY, getCanvas } from "./map.js";
 import { eventCard } from "./history.js";
+import * as saved from "./saved.js";
+import { distanceKm } from "./tilemath.js";
 
 const SMALL = 2; // zones with this many detections or fewer are tucked away by default
 
@@ -24,7 +26,10 @@ export function mount(ctx) {
   const smallToggle = el("button", { class: "btn btn-ghost btn-small", type: "button", hidden: true, onclick: () => { showSmall = !showSmall; renderList(); } });
   const featured = el("div", { class: "panel-body" });
 
+  const mine = el("div", { class: "panel-body", hidden: true });
   body.append(
+    mine,
+    tools(),
     el("div", { class: "section-title" }, el("h2", {}, "Şu an aktif bölgeler")),
     summary,
     explainer(),
@@ -48,6 +53,7 @@ export function mount(ctx) {
 
   load();
   loadFeatured();
+  loadMine();
 
   async function load() {
     try {
@@ -144,6 +150,31 @@ export function mount(ctx) {
     return row;
   }
 
+  // The places saved in this browser, each with what the satellites saw within 10 km in the last day.
+  async function loadMine() {
+    const places = saved.list();
+    mine.hidden = !places.length;
+    if (!places.length) return;
+    const rows = el("div", { class: "rows", role: "list" });
+    const card = el("div", { class: "card" }, rows);
+    clear(mine).append(el("div", { class: "section-title" }, el("h2", {}, "Yerlerim")), card);
+    for (const place of places) {
+      const meta = el("span", { class: "row-meta" }, "Kontrol ediliyor…");
+      const side = el("span", { class: "row-side" });
+      const open = () => ctx.navigate(`/?lat=${place.lat.toFixed(4)}&lon=${place.lon.toFixed(4)}&r=${place.r || 25}&name=${encodeURIComponent(place.name)}`);
+      const row = el("div", { class: "row row-split", role: "listitem" },
+        el("button", { class: "row-main", type: "button", onclick: open }, el("span", { class: "row-title" }, place.name), meta),
+        side,
+        el("button", { class: "btn btn-ghost btn-icon btn-small", type: "button", "aria-label": `${place.name} yerlerimden çıkar`, onclick: () => { saved.remove(place.lat, place.lon); loadMine(); } }, icon("x", 18)));
+      rows.append(row);
+      api.fires(place.lat, place.lon, 10, 24, signal).then((f) => {
+        const near = f.fires[0];
+        meta.textContent = near ? `10 km içinde ${plural(f.count, "tespit", "tespit")} · en yakını ${fmt.dec(distanceKm(place.lat, place.lon, near.latitude, near.longitude))} km, ${agoFrom(near.acquired_at)}` : `10 km içinde son 24 saatte tespit yok · son veri ${agoFrom(f.data_as_of.latest_observation_at)}`;
+        clear(side).append(el("span", { class: "pill", dataset: { level: near ? "very_high" : "low" } }, near ? "Yangın yakında" : "Tespit yok"));
+      }).catch((error) => { if (error.name !== "AbortError") meta.textContent = "Kontrol edilemedi"; });
+    }
+  }
+
   async function loadFeatured() {
     try {
       const data = await api.events(signal);
@@ -159,6 +190,15 @@ export function mount(ctx) {
       clear(featured).append(el("div", { class: "card empty" }, el("p", {}, "Geçmiş yangınlar yüklenemedi.")));
     }
   }
+}
+
+/** What this site is for, as three things to do. */
+function tools() {
+  const go = (href, ...children) => el("a", { class: "tile", href, "data-link": "" }, ...children);
+  return el("div", { class: "tiles" },
+    el("button", { class: "tile", type: "button", onclick: () => document.getElementById("place-search")?.focus() },
+      icon("search", 22), el("b", {}, "Yakınımda yangın var mı?"), el("span", {}, "İl ya da ilçe arayın, son 24 saatin uydu tespitlerini görün")),
+    go("/check", icon("layers", 22), el("b", {}, "Yerim yandı mı?"), el("span", {}, "Bir yerin yangından önceki ve sonraki uydu görüntüsü")));
 }
 
 function explainer() {
