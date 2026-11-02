@@ -48,6 +48,8 @@ wooded land** and want a plain answer in Turkish, and for **people who need to s
   and from after, side by side, with clouds filtered out. Burn scars show as dark brown. Useful for owners,
   villagers, insurers' first look, journalists and volunteers. The dates are suggested from what the
   satellites saw nearby.
+- **A printable report.** From a place check or a past fire, a one-page report (`/report`) with the two images,
+  the dates, the source, the cloud cover and what the images cannot tell; print it or save it as a PDF.
 - **"Is that smoke or cloud?"** A Harita/Uydu switch puts yesterday's satellite picture of the whole region
   on the map, so you can tell for yourself.
 - **Past fires** with the same before and after, to see how big fires of this season really were.
@@ -146,6 +148,12 @@ Settings come from environment variables or a `.env` file ([.env.example](.env.e
 | `TRUST_PROXY` | `false` | Use `X-Forwarded-For` for the client address (only behind your own proxy). |
 | `CORS_ORIGINS` | `*` | Sites allowed to call the API from a browser. |
 | `TILE_URL`, `TILE_ATTRIBUTION` | OpenStreetMap | The map tiles. |
+
+## Put it on the internet
+
+Telegram alerts, link previews and being found during a fire need a server that is always on. See
+[docs/deploy.md](docs/deploy.md) and `docker-compose.prod.yml`: one small server, Docker, a domain name and
+a reverse proxy that gets the HTTPS certificate by itself.
 
 ## Run with Docker
 

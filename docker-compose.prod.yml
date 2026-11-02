@@ -1,0 +1,41 @@
+# A public site with HTTPS, on one small server:
+#
+#   cp .env.example .env     # fill in FIRMS_MAP_KEY, SITE_ADDRESS, PUBLIC_URL, TRUST_PROXY=true, TELEGRAM_*
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# See docs/deploy.md. Only Caddy is reachable from the internet; the app is behind it.
+services:
+  kivilcim:
+    build: .
+    image: kivilcim:latest
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: sqlite:////data/kivilcim.db
+      TRUST_PROXY: "true"
+    volumes:
+      - kivilcim-data:/data
+    restart: unless-stopped
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS to your domain name in .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - kivilcim
+    restart: unless-stopped
+
+volumes:
+  kivilcim-data:
+  caddy-data:
+  caddy-config:

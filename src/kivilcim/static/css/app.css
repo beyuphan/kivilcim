@@ -562,3 +562,16 @@ a.event-card, a.row { color: inherit; text-decoration: none; }
 
 .tile-wide { grid-column: 1 / -1; }
 .actions .btn-primary { flex-basis: 100%; }
+
+/* ---- the printable report ---------------------------------------------------------------------- */
+
+.report-image { width: 100%; height: auto; border-radius: var(--r-lg); margin-block: var(--s-4); background: var(--surface-2); }
+@media print {
+  .no-print, .topbar { display: none !important; }
+  body { background: #fff; color: #000; }
+  .doc-body { height: auto; overflow: visible; background: #fff; }
+  .doc { max-width: none; padding: 0; }
+  .report-image { border-radius: 0; break-inside: avoid; }
+  .table-wrap { box-shadow: none; border: 1px solid #ccc; }
+  a { color: inherit; }
+}

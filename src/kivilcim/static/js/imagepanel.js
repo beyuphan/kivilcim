@@ -6,7 +6,7 @@ import { createCompare, describe } from "./compare.js";
 
 const QUALITY_TAG = { clear: "Açık", partly_cloudy: "Az bulutlu", cloudy: "Bulutlu", partial: "Kısmi" };
 
-export function createImagePanel(ctx, { box, noteBox, subject = "yangın", card = null }) {
+export function createImagePanel(ctx, { box, noteBox, subject = "yangın", card = null, report = null }) {
   let imagery = null;
   let compare = null;
   let visible = true;
@@ -51,7 +51,7 @@ export function createImagePanel(ctx, { box, noteBox, subject = "yangın", card 
   }
 
   // A picture of the two images side by side, to save or to send, and the link of this page.
-  function shareRow(cardUrl) {
+  function shareRow(cardUrl, reportUrl) {
     const share = async () => {
       try {
         if (navigator.share) await navigator.share({ title: document.title, url: location.href });
@@ -60,7 +60,8 @@ export function createImagePanel(ctx, { box, noteBox, subject = "yangın", card 
     };
     return el("div", { class: "actions", style: { marginTop: "12px" } },
       el("a", { class: "btn btn-secondary", href: cardUrl, download: "kivilcim-oncesi-sonrasi.jpg", target: "_blank", rel: "noopener" }, icon("image", 18), "Görseli indir"),
-      el("button", { class: "btn btn-secondary", type: "button", onclick: share }, icon("arrows-h", 18), "Bağlantıyı paylaş"));
+      el("button", { class: "btn btn-secondary", type: "button", onclick: share }, icon("arrows-h", 18), "Bağlantıyı paylaş"),
+      reportUrl ? el("a", { class: "btn btn-secondary", href: reportUrl, target: "_blank", rel: "noopener" }, icon("layers", 18), "Yazdırılabilir rapor") : null);
   }
 
   function render() {
@@ -71,7 +72,7 @@ export function createImagePanel(ctx, { box, noteBox, subject = "yangın", card 
       box.append(
         el("p", { class: "card-title" }, limited ? "Çok sık istek yapıldı" : rejected ? "Bu tarihler için görüntü aranamaz" : "Uydu görüntüleri şu an alınamadı"),
         el("p", { class: "card-sub", style: { marginTop: "6px" } }, limited ? "Bir dakika sonra yeniden deneyin." : rejected ? "Tarihler 2016'dan bugüne olmalı, en fazla 120 gün arayla." : "Daha sonra yeniden deneyin."),
-        reload && !rejected ? el("button", { class: "btn btn-secondary btn-small", type: "button", style: { marginTop: "12px" }, onclick: () => start(reload()) }, icon("refresh", 16), "Yeniden dene") : null);
+        reload && !rejected ? el("button", { class: "btn btn-secondary btn-small", type: "button", style: { marginTop: "12px" }, onclick: () => start(reload()) }, icon("refresh", 16), "Yeniden dene") : "");
       return;
     }
     const { before, after } = imagery;
@@ -89,7 +90,7 @@ export function createImagePanel(ctx, { box, noteBox, subject = "yangın", card 
     for (const [key, list, current] of [["before", imagery.before_options, before], ["after", imagery.after_options, after]]) {
       if (list?.length > 1) box.append(dateChips(key, list, current));
     }
-    if (card) box.append(shareRow(card()));
+    if (card) box.append(shareRow(card(), report ? report() : null));
     if (imagery.low_resolution) {
       box.append(el("p", { class: "card-sub", style: { marginTop: "12px" } }, "Bir taraf düşük çözünürlüklü (250 m) günlük görüntü. Bu tarihlerde 30 m çözünürlükte kullanılabilir bir görüntü bulamadık; ayrıntılar bulanık görünebilir."));
     }

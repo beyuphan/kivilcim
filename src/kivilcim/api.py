@@ -742,6 +742,10 @@ def create_app(
         ]
         return Response("\n".join(lines) + "\n", media_type="text/plain")
 
+    @app.get("/report", include_in_schema=False)
+    def report() -> HTMLResponse:
+        return render_page("report.html")
+
     @app.get("/embed", include_in_schema=False)
     def embed() -> HTMLResponse:
         return render_page("embed.html")

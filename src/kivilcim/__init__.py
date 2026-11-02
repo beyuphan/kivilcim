@@ -1,3 +1,3 @@
 """Kıvılcım: wildfire monitoring built on NASA FIRMS satellite data."""
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"

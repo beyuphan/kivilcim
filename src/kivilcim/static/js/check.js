@@ -53,7 +53,8 @@ export function mount(ctx, params) {
   flyTo(lat, lon, 12);
 
   let cardUrl = "";
-  const panel = createImagePanel(ctx, { box, noteBox, subject: "yangın", card: () => cardUrl });
+  let reportUrl = "";
+  const panel = createImagePanel(ctx, { box, noteBox, subject: "yangın", card: () => cardUrl, report: () => reportUrl });
   ctx.onCleanup(() => panel.destroy());
 
   if (!name) loadIndex().then((entries) => {
@@ -90,6 +91,7 @@ export function mount(ctx, params) {
     url.searchParams.delete("auto");
     history.replaceState({}, "", url);
     cardUrl = `/imagery/place/card.jpg?${new URLSearchParams({ lat: lat.toFixed(3), lon: lon.toFixed(3), start: from, end: to, ...(name ? { name } : {}) })}`;
+    reportUrl = `/report?${new URLSearchParams({ lat: lat.toFixed(3), lon: lon.toFixed(3), start: from, end: to, ...(name ? { name } : {}) })}`;
     announce("Uydu görüntüleri aranıyor");
     panel.start(api.placeImagery(lat, lon, from, to, signal), () => api.placeImagery(lat, lon, from, to, signal));
   }

@@ -129,7 +129,7 @@ export function mount(ctx, params) {
       el("button", { class: "btn btn-secondary", type: "button", onclick: share }, icon("arrows-h", 18), "Paylaş"),
       bot.enabled && bot.username
         ? el("a", { class: "btn btn-primary", href: `https://t.me/${bot.username}?start=p${Math.round(lat * 100)}_${Math.round(lon * 100)}_${Math.min(Math.max(Math.round(radius), 3), 50)}`, target: "_blank", rel: "noopener" }, icon("alert", 18), "Yangın çıkınca Telegram'dan haber ver")
-        : null);
+        : "");
   }
 
   function back() {

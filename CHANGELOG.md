@@ -3,6 +3,19 @@
 All notable changes. The format follows [Keep a Changelog](https://keepachangelog.com/) and the
 project uses [semantic versioning](https://semver.org/).
 
+## [0.8.0] - 2026-11-03
+
+### Added
+- **Printable report** (`/report`): one page for a place check or a past fire, with the before/after picture,
+  a table of dates, sources, resolution and cloud cover, what the images cannot tell, the source and a link;
+  print or save as a PDF. A "Yazdırılabilir rapor" button on fires and place checks.
+- **Deployment**: `docs/deploy.md` and `docker-compose.prod.yml` with a Caddy reverse proxy (automatic HTTPS)
+  for one small server, with Telegram, backup and health-check notes. The compose file was checked with
+  `docker compose config`; the image itself was not built on the machine used for this release.
+
+### Fixed
+- A stray "null" appeared in some panels when an optional button was absent.
+
 ## [0.7.0] - 2026-11-03
 
 ### Added

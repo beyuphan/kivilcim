@@ -1,0 +1,5 @@
+# Caddy gets and renews the HTTPS certificate by itself. SITE_ADDRESS is your domain name.
+{$SITE_ADDRESS} {
+	encode zstd gzip
+	reverse_proxy kivilcim:8000
+}

@@ -282,3 +282,10 @@ def test_the_embed_page_loads_only_scripts_from_this_site(session_factory):
     html = make_client(session_factory).get("/embed").text
     for tag in re.findall(r"<script\b[^>]*>", html):
         assert "src=" in tag or 'type="application/json"' in tag, tag
+
+
+def test_the_report_page_is_served_without_being_indexed_and_loads_only_this_sites_scripts(session_factory):
+    html = make_client(session_factory).get("/report").text
+    assert 'name="robots" content="noindex"' in html and "Yazdır" in html
+    for tag in re.findall(r"<script\b[^>]*>", html):
+        assert "src=" in tag, tag
