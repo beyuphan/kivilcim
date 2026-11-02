@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Lint
+        run: ruff check src tests scripts
+      - name: Test
+        run: pytest -q
+      - name: The package carries its static files
+        run: |
+          pip wheel . --no-deps -w dist
+          python - <<'PY'
+          import glob, zipfile
+          names = zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist()
+          assert any(n.endswith("static/icons/icon-192.png") for n in names), "icons missing from the wheel"
+          assert any(n.endswith("static/index.html") for n in names), "pages missing from the wheel"
+          print("wheel ok:", len(names), "files")
+          PY

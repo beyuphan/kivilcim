@@ -1,0 +1,22 @@
+# docker compose up -d
+#
+# Reads settings from a .env file next to this one (see .env.example). The data is kept in a
+# named volume. For a public site put a reverse proxy that provides HTTPS in front of port 8000
+# and set TRUST_PROXY=true (see the README).
+services:
+  kivilcim:
+    build: .
+    image: kivilcim:latest
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: sqlite:////data/kivilcim.db
+    volumes:
+      - kivilcim-data:/data
+    restart: unless-stopped
+
+volumes:
+  kivilcim-data:

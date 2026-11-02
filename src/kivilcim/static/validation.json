@@ -55,7 +55,7 @@
   ],
   "generated": "2026-11-02",
   "index_version": "v2",
-  "software_version": "0.0.1",
+  "software_version": "0.1.0",
   "provider": "forecast",
   "details": {
     "fire_cases": 323,

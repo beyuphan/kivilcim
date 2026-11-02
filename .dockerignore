@@ -1,0 +1,25 @@
+# Secrets and local state must never end up in an image.
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite3
+data/validation-cache.json
+
+# Not needed to run
+.git
+.github
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+*.egg-info
+build
+dist
+tests
+scripts
+docs
+.vscode
+.idea

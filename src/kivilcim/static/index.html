@@ -296,7 +296,9 @@ function choose(lat, lon, radiusKm) {
   point = { lat, lon };
   if (radiusKm) $("radius").value = String(radiusKm);
   // The address keeps the place, so a link shares it: /?lat=39.9&lon=32.85&r=50
-  history.replaceState(null, "", "?" + new URLSearchParams({ lat: lat.toFixed(4), lon: lon.toFixed(4), r: $("radius").value }));
+  const link = new URLSearchParams({ lat: lat.toFixed(4), lon: lon.toFixed(4), r: $("radius").value });
+  if ($("small").checked) link.set("small", "1");
+  history.replaceState(null, "", "?" + link);
   loadDetail();
 }
 
@@ -481,6 +483,7 @@ loadPlaces();
 loadZones();
 (function openSharedPlace() {
   const q = new URLSearchParams(location.search);
+  if (q.get("small") === "1") { $("small").checked = true; loadZones(); }
   const lat = parseFloat(q.get("lat")), lon = parseFloat(q.get("lon")), r = q.get("r");
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return;
   const valid = ["10", "25", "50", "100", "250", "500"].includes(r) ? r : "25";
