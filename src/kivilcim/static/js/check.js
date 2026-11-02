@@ -52,7 +52,8 @@ export function mount(ctx, params) {
   L.circleMarker([lat, lon], { renderer: getCanvas(), radius: 8, weight: 4, color: "#fff", fillColor: "#2563EB", fillOpacity: 1, interactive: false }).addTo(layer);
   flyTo(lat, lon, 12);
 
-  const panel = createImagePanel(ctx, { box, noteBox, subject: "yangın" });
+  let cardUrl = "";
+  const panel = createImagePanel(ctx, { box, noteBox, subject: "yangın", card: () => cardUrl });
   ctx.onCleanup(() => panel.destroy());
 
   if (!name) loadIndex().then((entries) => {
@@ -88,6 +89,7 @@ export function mount(ctx, params) {
     url.searchParams.set("end", to);
     url.searchParams.delete("auto");
     history.replaceState({}, "", url);
+    cardUrl = `/imagery/place/card.jpg?${new URLSearchParams({ lat: lat.toFixed(3), lon: lon.toFixed(3), start: from, end: to, ...(name ? { name } : {}) })}`;
     announce("Uydu görüntüleri aranıyor");
     panel.start(api.placeImagery(lat, lon, from, to, signal), () => api.placeImagery(lat, lon, from, to, signal));
   }

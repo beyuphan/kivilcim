@@ -6,7 +6,7 @@ import { createCompare, describe } from "./compare.js";
 
 const QUALITY_TAG = { clear: "Açık", partly_cloudy: "Az bulutlu", cloudy: "Bulutlu", partial: "Kısmi" };
 
-export function createImagePanel(ctx, { box, noteBox, subject = "yangın" }) {
+export function createImagePanel(ctx, { box, noteBox, subject = "yangın", card = null }) {
   let imagery = null;
   let compare = null;
   let visible = true;
@@ -50,6 +50,19 @@ export function createImagePanel(ctx, { box, noteBox, subject = "yangın" }) {
     return group;
   }
 
+  // A picture of the two images side by side, to save or to send, and the link of this page.
+  function shareRow(cardUrl) {
+    const share = async () => {
+      try {
+        if (navigator.share) await navigator.share({ title: document.title, url: location.href });
+        else { await navigator.clipboard.writeText(location.href); announce("Bağlantı kopyalandı"); }
+      } catch { /* the person closed the share sheet */ }
+    };
+    return el("div", { class: "actions", style: { marginTop: "12px" } },
+      el("a", { class: "btn btn-secondary", href: cardUrl, download: "kivilcim-oncesi-sonrasi.jpg", target: "_blank", rel: "noopener" }, icon("image", 18), "Görseli indir"),
+      el("button", { class: "btn btn-secondary", type: "button", onclick: share }, icon("arrows-h", 18), "Bağlantıyı paylaş"));
+  }
+
   function render() {
     clear(box);
     if (!imagery || imagery.error) {
@@ -76,6 +89,7 @@ export function createImagePanel(ctx, { box, noteBox, subject = "yangın" }) {
     for (const [key, list, current] of [["before", imagery.before_options, before], ["after", imagery.after_options, after]]) {
       if (list?.length > 1) box.append(dateChips(key, list, current));
     }
+    if (card) box.append(shareRow(card()));
     if (imagery.low_resolution) {
       box.append(el("p", { class: "card-sub", style: { marginTop: "12px" } }, "Bir taraf düşük çözünürlüklü (250 m) günlük görüntü. Bu tarihlerde 30 m çözünürlükte kullanılabilir bir görüntü bulamadık; ayrıntılar bulanık görünebilir."));
     }

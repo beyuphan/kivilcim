@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Kıvılcım · Türkiye'de aktif yangın bölgeleri</title>
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/static/css/app.css?v=__VERSION__">
+<script type="application/json" id="kv-config">__CONFIG__</script>
+<script src="/static/vendor/leaflet/leaflet.js" defer></script>
+<script type="module" src="/static/js/embed.js?v=__VERSION__"></script>
+</head>
+<body class="embed">
+<div class="mapwrap" id="mapwrap" style="position:fixed;inset:0">
+  <div id="map" role="application" aria-label="Türkiye haritası: aktif yangın bölgeleri"></div>
+  <div class="map-card embed-card">
+    <b id="embed-title">Son 24 saatte uydunun gördüğü yangın bölgeleri</b>
+    <small id="embed-sub">Yükleniyor…</small>
+    <a href="/" target="_blank" rel="noopener">Kıvılcım'da aç</a>
+  </div>
+</div>
+<div id="live" class="sr-only" role="status" aria-live="polite"></div>
+</body>
+</html>

@@ -726,4 +726,5 @@ def test_the_latest_fire_near_a_place_suggests_the_dates(session_factory):
 
 def test_the_check_page_is_the_app_shell(session_factory):
     client = make_client(session_factory)
-    assert client.get("/check").text == client.get("/").text
+    page, home = client.get("/check").text, client.get("/").text
+    assert page[page.index("<body>"):] == home[home.index("<body>"):]

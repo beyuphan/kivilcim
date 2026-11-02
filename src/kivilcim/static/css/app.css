@@ -548,3 +548,14 @@ a.event-card, a.row { color: inherit; text-decoration: none; }
 }
 
 .threat .pill { flex: none; }
+
+/* ---- text for search engines, shown until the app draws, and the embedded map ------------------ */
+
+.seo { display: grid; gap: var(--s-3); padding: var(--s-2); }
+.seo h1 { font-size: var(--fs-xl); letter-spacing: -0.015em; }
+.seo h2 { font-size: var(--fs-lg); margin-top: var(--s-2); }
+.seo ul { columns: 2; padding-inline-start: 1.1em; list-style: disc; font-size: var(--fs-sm); }
+
+.embed-card { inset-block-start: var(--s-3); inset-inline-start: var(--s-3); padding: var(--s-3) var(--s-4); display: grid; gap: 2px; max-width: min(340px, calc(100% - 24px)); }
+.embed-card small { color: var(--text-2); }
+.embed-card a { font-weight: 650; font-size: var(--fs-sm); }

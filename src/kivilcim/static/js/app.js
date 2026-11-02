@@ -4,7 +4,7 @@
 import { $, el, clear, announce, agoFrom, fmt } from "./ui.js";
 import { api } from "./api.js";
 import { createMap, getMap, addBaseSwitch } from "./map.js";
-import { createSearch } from "./search.js";
+import { createSearch, fold, loadIndex } from "./search.js";
 import { initSheet } from "./sheet.js";
 
 const config = JSON.parse(document.getElementById("kv-config")?.textContent || "{}");
@@ -41,6 +41,8 @@ function locate() {
 let current = null; // { controller, cleanups }
 const modules = {};
 
+const slugOf = (name) => fold(name).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
 function route(url) {
   const path = url.pathname.replace(/\/+$/, "") || "/";
   if (path === "/check") return { name: "check", module: "check", nav: "check", params: url.searchParams };
@@ -54,14 +56,23 @@ function route(url) {
 
 export function navigate(href, { replace = false } = {}) {
   const url = new URL(href, location.origin);
-  if (url.origin !== location.origin || !route(url)) { location.assign(href); return; }
+  if (url.origin !== location.origin || !(route(url) || url.pathname.startsWith("/il/"))) { location.assign(href); return; }
   if (url.pathname + url.search !== location.pathname + location.search) history[replace ? "replaceState" : "pushState"]({}, "", url);
   render();
 }
 
 async function render() {
   const url = new URL(location.href);
-  const target = route(url);
+  let target = route(url);
+  // A province page (/il/nigde) shows that province on the map.
+  const province = url.pathname.match(/^\/il\/([a-z0-9-]+)\/?$/);
+  if (province) {
+    const entries = await loadIndex().catch(() => []);
+    const found = entries.find((e) => e.kind === "il" && slugOf(e.name) === province[1]);
+    target = found
+      ? { name: "place", module: "place", nav: "map", params: new URLSearchParams({ lat: found.lat, lon: found.lon, r: 100, name: found.name }) }
+      : { name: "home", module: "home", nav: "map", params: url.searchParams };
+  }
   if (!target) return;
   if (current) {
     current.controller.abort();

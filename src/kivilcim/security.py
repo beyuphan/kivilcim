@@ -10,6 +10,8 @@ from starlette.responses import Response
 IMAGERY_HOST = "https://gibs.earthdata.nasa.gov"
 # The generated API documentation loads its own assets, so it gets no page policy.
 NO_PAGE_POLICY = ("/docs", "/redoc")
+# The embeddable map is the only page that may be shown inside other sites.
+EMBED_PATH = "/embed"
 
 BASE_HEADERS = {
     "X-Content-Type-Options": "nosniff",
@@ -58,6 +60,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         for name, value in BASE_HEADERS.items():
             response.headers.setdefault(name, value)
         is_page = response.headers.get("content-type", "").startswith("text/html")
+        embedded = request.url.path == EMBED_PATH
+        if embedded:  # the one page other sites may show in a frame
+            del response.headers["X-Frame-Options"]
         if is_page and not request.url.path.startswith(NO_PAGE_POLICY):
-            response.headers.setdefault("Content-Security-Policy", self._csp)
+            csp = self._csp.replace("frame-ancestors 'none'", "frame-ancestors *") if embedded else self._csp
+            response.headers.setdefault("Content-Security-Policy", csp)
         return response

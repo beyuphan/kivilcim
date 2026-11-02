@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     # use a tile provider and set its URL template here (with its attribution text).
     tile_url: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
     tile_attribution: str = "© OpenStreetMap"
+    # The public address of the site, such as https://kivilcim.example. Link previews, the sitemap and
+    # the canonical addresses use it; when empty the address of the request is used.
+    public_url: str = ""
 
     # Open-Meteo's free tier allows 10,000 calls per day. This is a call count, not money:
     # the service stops asking and serves cached weather before reaching that limit.

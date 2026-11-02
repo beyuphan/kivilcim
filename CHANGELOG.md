@@ -3,6 +3,22 @@
 All notable changes. The format follows [Keep a Changelog](https://keepachangelog.com/) and the
 project uses [semantic versioning](https://semver.org/).
 
+## [0.6.0] - 2026-11-03
+
+### Added
+- **Share cards.** `GET /events/{id}/card.jpg` and `GET /imagery/place/card.jpg`: a 1200x630 picture with the
+  satellite before and after side by side, the place, the dates, the source and the cloud cover. Built from
+  the map's own tiles with Pillow, kept for six hours. The page of a fire, a place check or any place now
+  carries its own title, description and preview tags (Open Graph, Twitter), so a link shows the picture
+  when it is posted. A "Görseli indir" and a "Bağlantıyı paylaş" button on fires and place checks.
+- **Province pages** (`/il/{slug}`, 81 of them) with a short text for search engines (the last day's
+  detections for that province, its districts), shown until the app draws the map; `/sitemap.xml` and
+  `/robots.txt`.
+- **`/embed`**: a small map of the active zones that other sites can show in a frame (the only page without
+  `frame-ancestors 'none'`).
+- `PUBLIC_URL` setting for canonical addresses, previews and the sitemap.
+- The Inter font (SIL Open Font License) for the cards, since the default font has no Turkish letters.
+
 ## [0.5.0] - 2026-11-03
 
 ### Added

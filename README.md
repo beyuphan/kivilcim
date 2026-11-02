@@ -26,6 +26,12 @@ wooded land** and want a plain answer in Turkish, and for **people who need to s
   place shows how many times the five fire satellites scanned it in the last 24 hours, when the last and the
   next scan are, and the longest gap with none. Predicted from public orbit data and checked against real
   detections (99 % of 600 detections fell inside the modeled swath).
+- **Sharing and embedding.** Every fire has a picture (before and after, side by side, with place, dates
+  and source) at `/events/{id}/card.jpg`, used as the preview when its link is posted, and a button to save it.
+  Province pages (`/il/adana`, all 81, listed in `/sitemap.xml`) carry text that search engines can read.
+  `/embed` is a map other sites can show in a frame:
+  `<iframe src="https://YOUR-SITE/embed" width="100%" height="480" style="border:0"></iframe>`.
+  Set `PUBLIC_URL` so previews and the sitemap use the site's real address.
 - **"Is it coming toward me?"** When a fire is near a place, the page compares the wind (direction and
   speed, from Open-Meteo) with where the nearest detection is: wind blowing from the fire toward you, across,
   or away. It draws the line to the fire and lists the district centers around it with the same wind check.

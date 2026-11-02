@@ -5,15 +5,18 @@ Start with: uvicorn kivilcim.api:create_app --factory
 
 import json
 import logging
+import re
 import threading
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
+from html import escape
 from pathlib import Path
 from typing import Literal
+from urllib.parse import quote, urlencode
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response
@@ -23,6 +26,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from kivilcim import __version__
+from kivilcim.cards import render_card
 from kivilcim.config import Settings, get_settings
 from kivilcim.db import init_db, make_engine, make_session_factory
 from kivilcim.events import Event, find_events
@@ -42,6 +46,7 @@ from kivilcim.ratelimit import RateLimitMiddleware
 from kivilcim.risk import compute_risk
 from kivilcim.scheduler import IngestScheduler, make_ingest_job
 from kivilcim.security import SecurityHeadersMiddleware, build_csp
+from kivilcim.seo import apply_head, head_tags, province_by_slug, provinces
 from kivilcim.weather import (
     ATTRIBUTION,
     CacheStatus,
@@ -548,18 +553,46 @@ def create_app(
         application/json is data, not script, so the content security policy does not mind it).
         "</" is escaped so no value can close the element, whatever it contains.
         """
+        return HTMLResponse(page_html(name), headers={"Cache-Control": "no-cache"})
+
+    def page_html(name: str) -> str:
         config = json.dumps(
             {"tileUrl": settings.tile_url, "tileAttribution": settings.tile_attribution, "version": __version__}
         ).replace("</", "<\\/")
         html = (STATIC_DIR / name).read_text(encoding="utf-8")
-        html = html.replace("__CONFIG__", config).replace("__VERSION__", __version__)
+        return html.replace("__CONFIG__", config).replace("__VERSION__", __version__)
+
+    def base_url(request: Request) -> str:
+        return (settings.public_url or str(request.base_url)).rstrip("/")
+
+    def shell(request: Request, title: str, description: str, image: str | None = None, text: str | None = None) -> HTMLResponse:
+        """The app page with its own title, description and link preview, and optionally a text that
+        search engines read in place of the loading skeleton (the script replaces it)."""
+        base = base_url(request)
+        query = f"?{request.url.query}" if request.url.query else ""
+        html = apply_head(page_html("index.html"), title, description, head_tags(base, request.url.path + query, title, description, image))
+        if text is not None:
+            html = re.sub(r"<!--SKELETON-->.*?<!--/SKELETON-->", lambda _: text, html, count=1, flags=re.S)
         return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+
+    DEFAULT_TITLE = "Kıvılcım · Türkiye'de uydudan yangın izleme"
+    DEFAULT_DESCRIPTION = (
+        "Türkiye'de NASA uydularının son saatlerde gördüğü yangın sıcaklıkları, uydunun yeri ne zaman taradığı, "
+        "rüzgar ve geçmiş yangınların öncesi-sonrası uydu görüntüleri. Resmi bir uyarı sistemi değildir."
+    )
 
     # One page, several addresses: the map, the past fires and one fire all open the same app, which
     # reads the address itself. Moving between them in the page never reloads the map.
     @app.get("/", include_in_schema=False)
-    def index() -> HTMLResponse:
-        return render_page("index.html")
+    def index(request: Request) -> HTMLResponse:
+        q = request.query_params
+        if "lat" in q and "lon" in q:
+            name = q.get("name", "").strip()[:60] or "Seçilen yer"
+            return shell(
+                request, f"{name} · yakındaki yangınlar · Kıvılcım",
+                f"{name} çevresinde son 24 saatte uydunun gördüğü yangın sıcaklıkları, uydunun yeri en son ne zaman taradığı ve rüzgar.",
+            )
+        return shell(request, DEFAULT_TITLE, DEFAULT_DESCRIPTION)
 
     @app.get("/manifest.webmanifest", include_in_schema=False)
     def manifest() -> FileResponse:
@@ -577,10 +610,106 @@ def create_app(
         )
 
     @app.get("/check", include_in_schema=False)
+    def check_page(request: Request) -> HTMLResponse:
+        q = request.query_params
+        title, description, image = "Yerim yandı mı? · Kıvılcım", "Bir yerin yangından önceki ve sonraki uydu görüntüsünü yan yana görün.", None
+        if all(k in q for k in ("lat", "lon", "start")):
+            name = q.get("name", "").strip()[:60]
+            title = f"{name or 'Yerim'} yandı mı? Öncesi ve sonrası uydu görüntüsü · Kıvılcım"
+            params = {k: q[k] for k in ("lat", "lon", "start", "end") if k in q}
+            if name:
+                params["name"] = name
+            image = f"{base_url(request)}/imagery/place/card.jpg?{urlencode(params)}"
+        return shell(request, title, description, image)
+
     @app.get("/history", include_in_schema=False)
+    def history_page(request: Request) -> HTMLResponse:
+        return shell(
+            request, "Geçmiş yangınlar · Kıvılcım",
+            "Uydunun gördüğü büyük yangınlar: her biri için yangından önceki ve sonraki uydu görüntüsü ve günlük yayılma haritası.",
+        )
+
     @app.get("/history/{event_id}", include_in_schema=False)
-    def history(event_id: str | None = None) -> HTMLResponse:  # also /check
-        return render_page("index.html")
+    def event_page(request: Request, event_id: str, session: Session = Depends(get_session)) -> HTMLResponse:
+        event = next((e for e in all_events(session) if e.id == event_id), None)
+        if event is None:
+            return shell(request, "Geçmiş yangın · Kıvılcım", "Uydunun gördüğü bir yangının öncesi ve sonrası.")
+        place = f"{event.district}, {event.province}"
+        return shell(
+            request,
+            f"{place} yangını: öncesi ve sonrası uydu görüntüsü · Kıvılcım",
+            f"{place} çevresinde {event.start.day}.{event.start.month}.{event.start.year} tarihinde başlayan yangın: "
+            f"{event.detections} uydu tespiti, {event.days} gün. Yangından önceki ve sonraki uydu görüntüleri.",
+            f"{base_url(request)}/events/{event.id}/card.jpg",
+        )
+
+    @app.get("/il/{slug}", include_in_schema=False)
+    def province_page(request: Request, slug: str, session: Session = Depends(get_session)) -> HTMLResponse:
+        province = province_by_slug(slug)
+        if province is None:
+            raise HTTPException(status_code=404, detail="Province not found.")
+        current = clock()
+        zones = [z for z in active_zones(session, current, 24) if z.province == province["name"]]
+        count, detections = len(zones), sum(z.detections for z in zones)
+        name = escape(province["name"])
+        if zones:
+            summary = (
+                f"Son 24 saatte {name} sınırları içinde uydular {count} bölgede toplam {detections} yangın sıcaklığı tespiti gördü."
+            )
+        else:
+            summary = (
+                f"Son 24 saatte {name} sınırları içinde uyduların gördüğü bir yangın sıcaklığı yok. Bu, yangın olmadığı anlamına "
+                "gelmez: uydular günde birkaç kez geçer ve küçük ya da kısa süreli ateşleri kaçırabilir."
+            )
+        districts = "".join(
+            f'<li><a href="/?lat={d["lat"]:.4f}&amp;lon={d["lon"]:.4f}&amp;r=25&amp;name={quote(d["name"] + ", " + province["name"])}">{escape(d["name"])}</a></li>'
+            for d in province["districts"]
+        )
+        text = (
+            f'<article class="seo"><h1>{name}: yangın tespitleri</h1><p>{summary}</p>'
+            "<p>Veriler NASA FIRMS uydu gözlemlerinden gelir ve saatler geç olabilir. Kıvılcım resmi bir uyarı sistemi değildir; "
+            "acil durumda 112'yi arayın.</p>"
+            f'<p><a href="/?lat={province["lat"]:.4f}&amp;lon={province["lon"]:.4f}&amp;r=100&amp;name={quote(province["name"])}">'
+            f"{name} haritada, son 24 saat</a> · <a href=\"/history\">Geçmiş yangınlar</a> · <a href=\"/methodology\">Yöntem</a></p>"
+            f"<h2>{name} ilçeleri</h2><ul>{districts}</ul></article>"
+        )
+        return shell(
+            request,
+            f"{province['name']} yangın tespitleri (son 24 saat) · Kıvılcım",
+            re.sub(r"<[^>]+>", "", summary.replace("&amp;", "&")),
+            None,
+            text,
+        )
+
+    @app.get("/sitemap.xml", include_in_schema=False)
+    def sitemap(request: Request, session: Session = Depends(get_session)) -> Response:
+        base = base_url(request)
+        paths = ["/", "/history", "/check", "/methodology"]
+        paths += [f"/il/{p['slug']}" for p in provinces()]
+        paths += [f"/history/{e.id}" for e in all_events(session) if e.in_turkey][:500]
+        body = "".join(f"<url><loc>{escape(base + p)}</loc></url>" for p in paths)
+        xml = f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{body}</urlset>'
+        return Response(xml, media_type="application/xml", headers={"Cache-Control": "public, max-age=3600"})
+
+    @app.get("/robots.txt", include_in_schema=False)
+    def robots(request: Request) -> Response:
+        lines = [
+            "User-agent: *",
+            "Allow: /",
+            "Allow: /events/*/card.jpg",
+            "Disallow: /events/",
+            "Disallow: /fires",
+            "Disallow: /risk",
+            "Disallow: /weather",
+            "Disallow: /passes",
+            "Disallow: /imagery/",
+            f"Sitemap: {base_url(request)}/sitemap.xml",
+        ]
+        return Response("\n".join(lines) + "\n", media_type="text/plain")
+
+    @app.get("/embed", include_in_schema=False)
+    def embed() -> HTMLResponse:
+        return render_page("embed.html")
 
     @app.get("/methodology", include_in_schema=False)
     def methodology() -> HTMLResponse:
@@ -1032,6 +1161,73 @@ def create_app(
             longest_gap_hours=round(summary["longest_gap_minutes"] / 60, 1) if summary["longest_gap_minutes"] else None,
             orbit_data_age_days=round(age.total_seconds() / 86400, 1) if age else None,
             note=note,
+        )
+
+    card_cache: dict = {}
+    card_lock = threading.Lock()
+
+    def make_card(key: str, imagery: dict, lat: float, lon: float, title: str, subtitle: str, extent_km: float) -> Response:
+        """A shareable before/after picture, kept for a few hours since building it fetches tiles."""
+        if not imagery["before"] and not imagery["after"]:
+            raise HTTPException(status_code=404, detail="There are no usable satellite images for this yet.")
+        stamp = clock().timestamp()
+        with card_lock:
+            hit = card_cache.get(key)
+            if hit and stamp - hit[0] < 6 * 3600:
+                body = hit[1]
+            else:
+                def fetch(url: str) -> bytes | None:
+                    try:
+                        r = weather_client.get(url, timeout=15)
+                    except httpx.HTTPError:
+                        return None
+                    return r.content if r.status_code == 200 else None
+
+                body = render_card(fetch, imagery, lat, lon, title, subtitle, extent_km)
+                if len(card_cache) >= 48:
+                    card_cache.pop(next(iter(card_cache)))
+                card_cache[key] = (stamp, body)
+        return Response(content=body, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=3600"})
+
+    @app.get("/events/{event_id}/card.jpg", include_in_schema=True)
+    def event_card(event_id: str, session: Session = Depends(get_session)) -> Response:
+        """A picture of a past fire with the satellite before and after, for sharing."""
+        event = next((e for e in all_events(session) if e.id == event_id), None)
+        if event is None:
+            raise HTTPException(status_code=404, detail="Event not found.")
+        imagery = imagery_for(session, event.id, event.center_lat, event.center_lon, event.start, event.end)
+        months = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
+        when = f"{event.start.day} {months[event.start.month - 1]}" if event.start == event.end else (
+            f"{event.start.day}-{event.end.day} {months[event.end.month - 1]} {event.end.year}"
+            if event.start.month == event.end.month
+            else f"{event.start.day} {months[event.start.month - 1]} - {event.end.day} {months[event.end.month - 1]} {event.end.year}"
+        )
+        return make_card(
+            f"e:{event.id}:{imagery['before'] and imagery['before']['date']}:{imagery['after'] and imagery['after']['date']}",
+            imagery, event.center_lat, event.center_lon, f"{event.district}, {event.province}",
+            f"{when} · {event.days} gün · {event.detections} uydu tespiti", event.extent_km,
+        )
+
+    @app.get("/imagery/place/card.jpg")
+    def place_card(
+        lat: float = Query(ge=TURKEY_MIN_LAT, le=TURKEY_MAX_LAT),
+        lon: float = Query(ge=TURKEY_MIN_LON, le=TURKEY_MAX_LON),
+        start: date = Query(),
+        end: date | None = Query(default=None),
+        name: str = Query(default="", max_length=60),
+        session: Session = Depends(get_session),
+    ) -> Response:
+        """The same picture for a place and dates chosen with the "did it burn" check."""
+        end = end or start
+        if start < FIRST_IMAGE_DAY or end < start or end > clock().date() or (end - start).days > MAX_CHECK_DAYS:
+            raise HTTPException(status_code=422, detail="The dates must be between 2016 and today, start before end, at most 120 days apart.")
+        lat, lon = round(lat, 2), round(lon, 2)
+        imagery = imagery_for(session, f"p{lat}_{lon}_{start}_{end}", lat, lon, start, end)
+        title = name.strip() or "Yangın öncesi ve sonrası"
+        subtitle = f"{start.day}.{start.month}.{start.year}" + ("" if end == start else f" - {end.day}.{end.month}.{end.year}")
+        return make_card(
+            f"p:{lat}:{lon}:{start}:{end}:{imagery['before'] and imagery['before']['date']}:{imagery['after'] and imagery['after']['date']}",
+            imagery, lat, lon, title, f"Yangın tarihi {subtitle}", 10.0,
         )
 
     @app.get("/imagery/place", response_model=EventImageryResponse)

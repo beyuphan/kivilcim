@@ -74,6 +74,11 @@ def test_health(client):
     assert response.json() == {"status": "ok"}
 
 
+def body_of(html: str) -> str:
+    """The part of a page after its head: the same for every address of the app."""
+    return html[html.index("<body>"):]
+
+
 def test_the_app_shell_is_served_with_the_disclaimer(client):
     response = client.get("/")
     assert response.status_code == 200
@@ -84,12 +89,12 @@ def test_the_app_shell_is_served_with_the_disclaimer(client):
 
 
 def test_the_history_routes_serve_the_same_app_shell(client):
-    shell = client.get("/").text
+    shell = body_of(client.get("/").text)
     for path in ("/history", "/history/2026-07-01_36.5_30.1"):
         response = client.get(path)
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/html")
-        assert response.text == shell
+        assert body_of(response.text) == shell  # only the head (title, preview) differs
     # The past-fires text is written in the script, since the pages are built in the browser.
     script = (Path(__file__).parent.parent / "src" / "kivilcim" / "static" / "js" / "history.js").read_text(encoding="utf-8")
     assert "Resmi bir kayıt değildir" in script and "doğrulanmış olaylar değildir" in script

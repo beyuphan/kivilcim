@@ -37,7 +37,7 @@ export function mount(ctx, params) {
     showAll();
     fit(L.latLngBounds([[e.bbox[0], e.bbox[1]], [e.bbox[2], e.bbox[3]]]).pad(0.25), { maxZoom: 13 });
     renderSummary();
-    panel = createImagePanel(ctx, { box: imageryBox, noteBox, subject: "yangın" });
+    panel = createImagePanel(ctx, { box: imageryBox, noteBox, subject: "yangın", card: () => `/events/${encodeURIComponent(id)}/card.jpg` });
     panel.start(imageryPromise, () => api.imagery(id, signal));
   }).catch((error) => {
     if (error.name === "AbortError") return;
