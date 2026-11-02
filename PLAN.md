@@ -219,7 +219,7 @@ Every response includes a `data_as_of` field and a short `disclaimer` field (not
 
 ## 15. Next step
 
-Stage 0 is done (skeleton, models, FIRMS parser, ingest job with deduplication and run tracking, tests). Next is Stage 1: the API (`/health`, `/status`, `/fires`). The risk index (Stage 2) follows the working fire API (Stages 0-1).
+Stage 0 is done (skeleton, models, FIRMS parser, ingest job with deduplication and run tracking, tests). Stage 1 is done (`/health`, `/status`, `/fires` with radius and time filters, freshness levels, tests). Next is Stage 1.5 (recurring hot spots) or, if the risk index is prioritized, Stage 2. The risk index (Stage 2) follows the working fire API (Stages 0-1).
 
 ---
 
@@ -437,4 +437,4 @@ Her yanıtta `data_as_of` alanı ve kısa bir `disclaimer` alanı bulunur (resmi
 
 ## 15. Sonraki adım
 
-Aşama 0 tamamlandı (iskelet, modeller, FIRMS ayrıştırıcı, tekrarsız yazan ve çalıştırmaları kaydeden ingest işi, testler). Sıradaki Aşama 1: API (`/health`, `/status`, `/fires`). Risk indeksi (Aşama 2), çalışan yangın API'sinden (Aşama 0-1) sonra gelir.
+Aşama 0 tamamlandı (iskelet, modeller, FIRMS ayrıştırıcı, tekrarsız yazan ve çalıştırmaları kaydeden ingest işi, testler). Aşama 1 tamamlandı (`/health`, `/status`, `/fires`; yarıçap ve zaman filtreleri, tazelik seviyeleri, testler). Sıradaki Aşama 1.5 (tekrarlayan sıcak noktalar) ya da risk indeksi öncelikliyse Aşama 2. Risk indeksi (Aşama 2), çalışan yangın API'sinden (Aşama 0-1) sonra gelir.

@@ -53,7 +53,17 @@ Run the FIRMS ingest job (needs `FIRMS_MAP_KEY` in `.env`; run it from a schedul
 python -m kivilcim.ingest
 ```
 
-The API and the remaining run instructions will be added in the next milestone.
+Start the API, then open http://127.0.0.1:8000/docs for the interactive documentation:
+
+```bash
+uvicorn kivilcim.api:create_app --factory
+```
+
+Endpoints:
+
+- `GET /health`: is the service up
+- `GET /status`: last successful update and delay per source, plus `data_as_of`
+- `GET /fires?lat=&lon=&radius_km=&since_hours=`: nearby detections with observation time, confidence and distance. Low-confidence detections are listed separately.
 
 ## Configuration
 
