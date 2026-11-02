@@ -14,6 +14,23 @@ const SHELL = [
   "/methodology",
   "/manifest.webmanifest",
   "/static/pwa.js",
+  "/static/css/app.css",
+  "/static/js/app.js",
+  "/static/js/ui.js",
+  "/static/js/icons.js",
+  "/static/js/api.js",
+  "/static/js/map.js",
+  "/static/js/search.js",
+  "/static/js/sheet.js",
+  "/static/js/tilemath.js",
+  "/static/js/home.js",
+  "/static/js/place.js",
+  "/static/js/history.js",
+  "/static/js/event.js",
+  "/static/js/compare.js",
+  "/static/js/methodology.js",
+  "/static/vendor/leaflet/leaflet.js",
+  "/static/vendor/leaflet/leaflet.css",
   "/static/ilceler.json",
   "/static/icons/icon-192.png",
   "/static/icons/icon-512.png",
@@ -22,8 +39,7 @@ const SHELL = [
 // Paths that must always hit the network.
 const LIVE = ["/fires", "/risk", "/weather", "/status", "/events", "/health", "/docs", "/openapi.json"];
 
-// Third-party files that are safe to keep (the map library). Map tiles are not cached here.
-const CACHEABLE_HOSTS = ["unpkg.com"];
+// Only this site's own files are kept. Map and satellite tiles are never cached here.
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -78,7 +94,7 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     event.respondWith(page(request));
-  } else if (url.origin === self.location.origin || CACHEABLE_HOSTS.includes(url.hostname)) {
+  } else if (url.origin === self.location.origin) {
     event.respondWith(asset(request));
   }
 });

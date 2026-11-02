@@ -2,47 +2,33 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#b91c1c">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F7F6F3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12151A" media="(prefers-color-scheme: dark)">
+<title>Yöntem ve sınırlar · Kıvılcım</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32.png">
 <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<link rel="stylesheet" href="/static/css/app.css?v=__VERSION__">
 <script src="/static/pwa.js" defer></script>
-<title>Kıvılcım: Yöntem ve sınırlar</title>
-<style>
-  :root { --bg: #f6f5f2; --panel: #ffffff; --text: #1f2328; --muted: #5b6470; --line: #dcdad4; --link: #1d4ed8; --stale: #b91c1c; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #14161a; --panel: #1d2026; --text: #e8e6e1; --muted: #9aa3ad; --line: #343942; --link: #93b4ff; }
-  }
-  * { box-sizing: border-box; }
-  [hidden] { display: none !important; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  a { color: var(--link); }
-  header { padding: 12px 16px 4px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; max-width: 860px; margin: 0 auto; }
-  h1 { margin: 0; font-size: 22px; }
-  main { max-width: 860px; margin: 0 auto; padding: 0 16px 32px; }
-  h2 { font-size: 19px; margin: 28px 0 6px; }
-  h3 { font-size: 16px; margin: 18px 0 4px; }
-  p, li { margin: 6px 0; }
-  .disclaimer { margin: 12px 0; padding: 10px 14px; border: 1px solid var(--line); border-left: 4px solid var(--stale); background: var(--panel); font-size: 15px; }
-  table { border-collapse: collapse; width: 100%; background: var(--panel); font-size: 14px; margin: 8px 0; }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { color: var(--muted); font-weight: 600; }
-  .scroll { overflow-x: auto; }
-  .note { color: var(--muted); font-size: 14px; }
-  code { font-size: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
-  footer { max-width: 860px; margin: 0 auto; padding: 0 16px 32px; font-size: 13px; color: var(--muted); }
-</style>
+<script type="module" src="/static/js/methodology.js?v=__VERSION__"></script>
 </head>
 <body>
-<header>
-  <h1>Yöntem ve sınırlar</h1>
-  <a href="/">← Güncel harita</a>
+<header class="topbar">
+  <a class="brand" href="/"><img src="/static/icons/icon-192.png" width="28" height="28" alt=""><span>Kıvılcım</span></a>
+  <nav class="nav" aria-label="Ana gezinme">
+    <a href="/"><span>Harita</span></a>
+    <a href="/history"><span>Geçmiş yangınlar</span></a>
+    <a href="/methodology" aria-current="page"><span>Yöntem</span></a>
+  </nav>
+  <div class="topbar-end"><a class="sos" href="tel:112" aria-label="Acil durum: 112'yi ara">112</a></div>
 </header>
-<main>
-<div class="disclaimer">
-  <strong>Kıvılcım resmi bir uyarı sistemi değildir.</strong> Uydu tespitleri gecikmeli olabilir, yanlış pozitif içerebilir ve her yangını
-  göstermez. Acil durumda <strong>112</strong>'yi arayın ve <strong>AFAD</strong> ile iletişime geçin.
+<div class="doc-body">
+<main class="doc">
+<h1>Yöntem ve sınırlar</h1>
+<div class="notice" style="margin-top:16px">
+  <span><strong>Kıvılcım resmi bir uyarı sistemi değildir.</strong> Uydu tespitleri gecikmeli olabilir, yanlış pozitif içerebilir ve her yangını
+  göstermez. Acil durumda <strong>112</strong>'yi arayın ve <strong>AFAD</strong> ile iletişime geçin.</span>
 </div>
 
 <h2>Bu site ne yapar, ne yapmaz</h2>
@@ -73,7 +59,7 @@ ne kadar elverişli olduğunu (sıcak, kuru, rüzgarlı, yağışsız) söyler. 
 <h2>Havanın elverişliliği (deneysel indeks)</h2>
 <p>Her aktif bölgenin merkezi için Open-Meteo'dan güncel hava alınır (sıcaklık, bağıl nem, rüzgar, son 72 saatteki yağış) ve basit bir kural tabanlı
 skor (0-100) hesaplanır. Makine öğrenmesi yoktur; formül şeffaftır ve her sonuç girdileriyle birlikte gösterilir. Sürüm: <code>v2</code>.</p>
-<div class="scroll"><table>
+<div class="table-wrap"><table>
   <thead><tr><th>Etken</th><th>Nasıl ölçeklenir (0 ile 1 arası)</th><th>Rolü</th></tr></thead>
   <tbody>
     <tr><td>Nem</td><td>%70'te 0, %15'te 1</td><td>Kuruluk ortalamasında ağırlık 0,35</td></tr>
@@ -91,9 +77,17 @@ saatlerin tahmini. Hava modelinin çözünürlüğü kabadır; yerel koşullar f
 tespitin çevresinde ve "elverişlilik" olarak gösterilir.</p>
 
 <h2 id="validation-title">Doğrulama</h2>
-<p class="note">İndeks bir akıl yürütmeyle seçildi, kalibre edilmedi. Aşağıda, geçmiş verilerle yapılan ölçümlerin sonucu yer alır. Sonuç zayıfsa bunu açıkça söylemek
+<p class="muted">İndeks bir akıl yürütmeyle seçildi, kalibre edilmedi. Aşağıda, geçmiş verilerle yapılan ölçümlerin sonucu yer alır. Sonuç zayıfsa bunu açıkça söylemek
 bu bölümün görevidir.</p>
-<div id="validation"><p class="note">Yükleniyor…</p></div>
+<div id="validation"><p class="muted">Yükleniyor…</p></div>
+
+<h2>Öncesi ve sonrası uydu görüntüleri</h2>
+<p>Her geçmiş yangın için, yangının başlangıcından önceki ve bitişinden sonraki en uygun gün NASA GIBS'in açık uydu katmanlarından seçilir ve aynı haritada bir çizgiyle karşılaştırılır.</p>
+<ul>
+  <li><strong>Kaynak:</strong> Önce 30 m çözünürlüklü HLS (Sentinel-2 ve Landsat). Uygun gün bulunamazsa 250 m çözünürlüklü günlük VIIRS görüntüsü kullanılır ve bu açıkça belirtilir.</li>
+  <li><strong>Gün seçimi:</strong> Yangından en fazla 21 gün önce ve 28 gün sonrasına kadar haftalık adımlarla aranır. Her aday gün için olayın üzerindeki görüntü karosu indirilip boş (görüntü yok) ve bulutlu pikseller sayılır; en yakın kullanılabilir gün seçilir, daha uzak ama açık bir gün en fazla 8 gün farkla tercih edilir.</li>
+  <li><strong>Sınır:</strong> Görüntüler bulutlu, kısmi ya da yangından günler uzakta olabilir. Her tarafın tarihi, kaynağı, çözünürlüğü ve bulut durumu yazılır. Yanık alan sınırı çizilmez; görüntüye bakıp kendiniz değerlendirirsiniz.</li>
+</ul>
 
 <h2>Geçmiş yangınlar sayfası</h2>
 <p><a href="/history">Geçmiş yangınlar</a> sayfasındaki olaylar, uydu tespitlerinin güç, yer ve zamana göre otomatik gruplanmasıdır; doğrulanmış olaylar değildir.</p>
@@ -129,42 +123,6 @@ hizmetinin kendi günlükleri ayrıca koordinat içerebilir; kendi sunucunuzu ç
   <li>Uygulama yangınlara müdahale bilgisi (ekipler, helikopterler) vermez ve vermesi planlanmamıştır.</li>
 </ul>
 </main>
-<footer>Bu sayfa yazılımın nasıl çalıştığını anlatır; kodla birlikte güncellenir.</footer>
-
-<script>
-(function () {
-  var box = document.getElementById("validation");
-  function el(tag, text, className) { var n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (className) n.className = className; return n; }
-  function pct(x) { return (x * 100).toFixed(0) + "%"; }
-
-  fetch("/static/validation.json").then(function (r) {
-    if (!r.ok) throw new Error("none");
-    return r.json();
-  }).then(function (v) {
-    box.replaceChildren();
-    box.appendChild(el("p", v.summary));
-    if (v.usage_note) { var u = el("p", v.usage_note); u.style.fontWeight = "600"; box.appendChild(u); }
-    if (v.tests && v.tests.length) {
-      var wrap = el("div", undefined, "scroll");
-      var table = document.createElement("table");
-      var head = document.createElement("tr");
-      ["Ölçüm", "Sonuç", "Örnek sayısı", "Yorum"].forEach(function (h) { head.appendChild(el("th", h)); });
-      var thead = document.createElement("thead"); thead.appendChild(head); table.appendChild(thead);
-      var tbody = document.createElement("tbody");
-      v.tests.forEach(function (t) {
-        var tr = document.createElement("tr");
-        tr.appendChild(el("td", t.name)); tr.appendChild(el("td", t.result));
-        tr.appendChild(el("td", String(t.n))); tr.appendChild(el("td", t.comment));
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody); wrap.appendChild(table); box.appendChild(wrap);
-    }
-    (v.caveats || []).forEach(function (c) { box.appendChild(el("p", c, "note")); });
-    if (v.generated) box.appendChild(el("p", "Üretildi: " + v.generated + " (indeks " + v.index_version + ")", "note"));
-  }).catch(function () {
-    box.replaceChildren(el("p", "Doğrulama sonuçları henüz yayımlanmadı.", "note"));
-  });
-})();
-</script>
+</div>
 </body>
 </html>

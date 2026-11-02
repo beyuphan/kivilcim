@@ -24,15 +24,19 @@ code are in English, and [PLAN.md](PLAN.md) is bilingual.
   and when a satellite last observed the area. Hours between satellite passes are normal.
 - **Weaker evidence is shown, not hidden.** Low-confidence detections and places that detect almost every
   day (probably a factory, refinery, flare or landfill) are drawn as hollow rings and listed apart.
-- **Past fires** (`/history`). The big fires found in the satellite archive, with a map of how the
-  detections spread day by day.
+- **Past fires** (`/history`). The big fires found in the satellite archive, each with the satellite
+  image **before and after** it on one map (drag the line), and a day-by-day map of how the detections
+  spread. Images come from NASA GIBS: 30 m Sentinel-2 and Landsat when a clear day exists, the 250 m daily
+  VIIRS image otherwise, always labeled with their date, source and cloud cover.
 - **Methodology** (`/methodology`). The data, formulas, thresholds, licenses, privacy and limits, and the
   results of measuring the weather index against past detections.
 - **Installable and offline-aware.** Works on phones, installs as an app, and never shows stored data as if
   it were current.
 - **An API** for developers: read-only, free, documented at `/docs`.
 
-![Past fires: how a fire spread, day by day](docs/screenshots/history.png)
+![Past fires: every fire with its satellite before and after](docs/screenshots/history.png)
+
+![One fire: drag the line to compare the satellite image before and after](docs/screenshots/compare.png)
 
 ### About the weather index
 

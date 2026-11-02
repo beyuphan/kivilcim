@@ -3,6 +3,36 @@
 All notable changes. The format follows [Keep a Changelog](https://keepachangelog.com/) and the
 project uses [semantic versioning](https://semver.org/).
 
+## [0.2.0] - 2026-11-03
+
+The whole front end was redone, and every past fire now shows satellite images from before and after.
+
+### Added
+- **Before and after satellite images** for every past fire, on one map with a draggable line. The
+  server picks the nearest usable day on each side from NASA GIBS (30 m Sentinel-2 and Landsat, the
+  250 m daily VIIRS image as a labeled fallback) by measuring cloud cover on real tiles, and stores the
+  choice. New endpoint `GET /events/{id}/imagery`, with its own rate limit.
+- **Past fires as part of the app**, not a link: featured fires with before/after thumbnails on the home
+  panel, a list with a year filter and a map of all fires, and a page per fire (`/history/{id}`) with the
+  image comparison and a play button that replays the spread.
+- **A clearer "active zones" panel**: a sentence that says what was seen, three numbers, an expandable
+  explanation of zones, detections and colors, level names next to colors, and small zones tucked away.
+- `/risk/zones?weather=false` answers at once without the weather index.
+
+### Changed
+- **New design** (`docs/design-system.md`): one panel and one map on wide screens, a three-height sheet on
+  phones, light and dark themes, measured text contrast, 44 px touch targets, keyboard and screen reader
+  support, and reduced-motion support.
+- **Faster map**: no third-party scripts (the map library is served from this site), markers drawn on one
+  canvas, base tiles requested only when the map stops moving, zones drawn before the weather arrives,
+  and weather fetched ahead of time after each update. In a desktop run, first paint went from 1.4 s to
+  0.14 s and layout shift from 0.023 to 0.014.
+- The pages are one app that swaps views without reloading; the content security policy now allows
+  scripts from this site only.
+
+### Fixed
+- The test suite no longer imports one test module from another, which failed in continuous integration.
+
 ## [0.1.0] - 2026-11-03
 
 First complete version.

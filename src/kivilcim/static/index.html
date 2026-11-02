@@ -2,496 +2,63 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#b91c1c">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F7F6F3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12151A" media="(prefers-color-scheme: dark)">
+<meta name="description" content="Türkiye'de NASA uydularının son saatlerde gördüğü yangın sıcaklıkları, hava durumu ve geçmiş yangınların öncesi-sonrası uydu görüntüleri. Resmi bir uyarı sistemi değildir.">
+<title>Kıvılcım · Türkiye'de uydudan yangın izleme</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32.png">
 <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://gibs.earthdata.nasa.gov" crossorigin>
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/static/css/app.css?v=__VERSION__">
+<link rel="modulepreload" href="/static/js/ui.js?v=__VERSION__">
+<link rel="modulepreload" href="/static/js/api.js?v=__VERSION__">
+<script type="application/json" id="kv-config">__CONFIG__</script>
+<script src="/static/vendor/leaflet/leaflet.js" defer></script>
 <script src="/static/pwa.js" defer></script>
-<title>Kıvılcım</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-<style>
-  :root {
-    --bg: #f6f5f2; --panel: #ffffff; --text: #1f2328; --muted: #5b6470; --line: #dcdad4; --link: #1d4ed8;
-    --fresh: #15803d; --warning: #b45309; --stale: #b91c1c; --unknown: #5b6470;
-    --high: #b91c1c; --nominal: #ea580c; --low: #6b7280;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #14161a; --panel: #1d2026; --text: #e8e6e1; --muted: #9aa3ad; --line: #343942; --link: #93b4ff; }
-  }
-  * { box-sizing: border-box; }
-  [hidden] { display: none !important; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  a { color: var(--link); }
-  header { padding: 12px 16px 4px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px 16px; flex-wrap: wrap; }
-  h1 { margin: 0; font-size: 22px; }
-  nav { font-size: 14px; display: flex; gap: 14px; flex-wrap: wrap; }
-  .tagline { color: var(--muted); font-size: 13px; padding: 0 16px; }
-  .disclaimer { margin: 8px 16px; padding: 8px 12px; border: 1px solid var(--line);
-                border-left: 4px solid var(--stale); background: var(--panel); font-size: 13px; }
-  .box { margin: 8px 16px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
-  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; color: #fff; font-size: 12px; font-weight: 600; margin-right: 6px; }
-  .badge.fresh { background: var(--fresh); } .badge.warning { background: var(--warning); }
-  .badge.stale { background: var(--stale); } .badge.unknown { background: var(--unknown); }
-  .small { font-size: 12px; color: var(--muted); }
-  .line { font-size: 13px; }
-  .controls { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 8px 16px; }
-  .controls label { font-size: 13px; color: var(--muted); }
-  select, button { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); }
-  button { cursor: pointer; }
-  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; margin: 0 16px; align-items: start; }
-  @media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
-  #map { height: 62vh; min-height: 340px; border: 1px solid var(--line); border-radius: 6px; background: #e9e7e1; }
-  .leaflet-tile-pane { filter: grayscale(.45) brightness(1.03); }
-  .legend { position: absolute; z-index: 500; left: 10px; bottom: 10px; background: color-mix(in srgb, var(--panel) 93%, transparent);
-            border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; font-size: 11px; max-width: calc(100% - 20px); }
-  .legend .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 3px; }
-  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 3px; vertical-align: -1px; }
-  .mapwrap { position: relative; }
-  h2 { font-size: 15px; margin: 0 0 6px; }
-  #zones { display: flex; flex-direction: column; gap: 6px; max-height: 62vh; overflow-y: auto; }
-  @media (max-width: 900px) { #zones { max-height: 260px; } }
-  .zone { text-align: left; padding: 7px 9px; font: inherit; color: inherit; width: 100%; }
-  .zone .t { font-weight: 600; }
-  .zone .m { font-size: 12px; color: var(--muted); }
-  .lvl { display: inline-block; padding: 0 7px; border-radius: 9px; color: #fff; font-size: 11px; font-weight: 600; margin-left: 4px; }
-  .card { margin: 8px 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; }
-  .card .box { margin: 0; }
-  .stat { display: inline-block; min-width: 92px; margin: 2px 10px 2px 0; }
-  .stat b { display: block; font-size: 17px; }
-  .stat span { font-size: 11px; color: var(--muted); }
-  #summary { margin: 10px 16px 4px; font-weight: 600; }
-  #notice { margin: 4px 16px; font-size: 14px; }
-  table { border-collapse: collapse; width: calc(100% - 32px); margin: 8px 16px 24px; font-size: 13px; background: var(--panel); }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
-  th { color: var(--muted); font-weight: 600; }
-  .conf { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; }
-  .conf.high { background: var(--high); } .conf.nominal { background: var(--nominal); }
-  .conf.low { background: transparent; border: 2px solid var(--low); }
-  .table-wrap { overflow-x: auto; }
-  footer { margin: 0 16px 24px; font-size: 12px; color: var(--muted); }
-  footer a { color: inherit; }
-</style>
+<script type="module" src="/static/js/app.js?v=__VERSION__"></script>
 </head>
 <body>
-<header>
-  <h1>Kıvılcım</h1>
-  <nav>
-    <a href="/history">Geçmiş yangınlar</a>
-    <a href="/methodology">Yöntem ve sınırlar</a>
-  </nav>
-</header>
-<div class="tagline">NASA FIRMS uydu verisiyle Türkiye'deki yangın tespitleri</div>
-
-<div class="disclaimer">
-  <strong>Resmi bir uyarı sistemi değildir.</strong> Uydu tespitleri gecikmeli olabilir ve yanlış pozitif içerebilir.
-  Acil durumda <strong>112</strong>'yi arayın ve <strong>AFAD</strong> ile iletişime geçin.
-</div>
-
-<div class="box" id="status" aria-live="polite">Veri durumu yükleniyor…</div>
-
-<div class="controls">
-  <button id="locate" type="button">Konumumu kullan</button>
-  <label>İl <select id="province"><option value="">Seçin…</option></select></label>
-  <label>İlçe <select id="district" disabled><option value="">Tüm il</option></select></label>
-  <label>Yarıçap
-    <select id="radius">
-      <option value="10">10 km</option><option value="25" selected>25 km</option><option value="50">50 km</option>
-      <option value="100">100 km</option><option value="250">250 km</option><option value="500">500 km</option>
-    </select>
-  </label>
-  <label>Zaman
-    <select id="since">
-      <option value="6">Son 6 saat</option><option value="24" selected>Son 24 saat</option>
-      <option value="48">Son 48 saat</option><option value="168">Son 7 gün</option>
-    </select>
-  </label>
-  <label><input type="checkbox" id="small"> Küçük bölgeleri de göster</label>
-</div>
-<div class="small" style="margin: 0 16px 6px">Haritada son 24 saatte tespit olan bölgeler görünür. Konum seçmek için il/ilçe seçin, haritaya tıklayın ya da konumunuzu kullanın.</div>
-
-<div class="layout">
-  <div class="mapwrap">
-    <div id="map"></div>
-    <div class="legend" aria-label="Harita açıklaması">
-      <strong>Aktif tespit bölgeleri</strong>: renk, oradaki havanın yangın için elverişliliği (deneysel)
-      <div class="row">
-        <span><i style="background:#15803d"></i>Düşük</span><span><i style="background:#b45309"></i>Orta</span>
-        <span><i style="background:#c2410c"></i>Yüksek</span><span><i style="background:#b91c1c"></i>Çok yüksek</span>
-        <span><i style="background:#7f1d1d"></i>Aşırı</span><span><i style="background:#9ca3af"></i>Hava alınamadı</span>
-      </div>
-      <div>Büyüklük: toplam ısı gücü</div>
+<a class="skip" href="#panel-body">Ana içeriğe geç</a>
+<div class="app">
+  <header class="topbar">
+    <a class="brand" href="/" data-link aria-label="Kıvılcım, ana sayfa">
+      <img src="/static/icons/icon-192.png" width="28" height="28" alt="">
+      <span>Kıvılcım</span>
+    </a>
+    <nav class="nav" aria-label="Ana gezinme">
+      <a href="/" data-link data-nav="map" aria-current="page"><svg class="icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6.5v13L9 17l6 2.5 6-2.5v-13L15 6.5 9 4Z"/><path d="M9 4v13M15 6.5v13"/></svg><span>Harita</span></a>
+      <a href="/history" data-link data-nav="history"><svg class="icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg><span>Geçmiş yangınlar</span></a>
+      <a href="/methodology" data-nav="info"><svg class="icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><span>Yöntem</span></a>
+    </nav>
+    <div class="topbar-end">
+      <button class="status-chip" id="status-chip" type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="Veri durumu"><span class="status-dot" aria-hidden="true"></span><span class="label">Veri durumu</span></button>
+      <a class="sos" href="tel:112" aria-label="Acil durum: 112'yi ara">112</a>
     </div>
-  </div>
-  <div>
-    <h2 id="zonesTitle">Aktif bölgeler</h2>
-    <div id="zones"></div>
-  </div>
+  </header>
+
+  <main class="stage">
+    <aside class="panel" id="panel" aria-label="Yangın bilgisi">
+      <button class="sheet-handle" id="sheet-handle" type="button" aria-label="Paneli büyüt"></button>
+      <div id="search-slot" class="card skeleton" style="height:54px" aria-hidden="true"></div>
+      <div class="panel-body" id="panel-body" tabindex="-1" aria-busy="true">
+        <div class="skeleton" style="height:28px;width:60%"></div>
+        <div class="skeleton" style="height:170px"></div>
+        <div class="skeleton" style="height:58px"></div>
+        <div class="skeleton" style="height:370px"></div>
+      </div>
+      <footer class="notice">
+        <span>Bu site resmi bir uyarı sistemi değildir; NASA FIRMS uydu verisini gösterir ve veri geç gelebilir. Tehlikedeyseniz <a href="tel:112">112</a>'yi arayın ve AFAD ile iletişime geçin.</span>
+      </footer>
+    </aside>
+    <div class="mapwrap" id="mapwrap">
+      <div id="map" role="application" aria-label="Türkiye haritası"></div>
+    </div>
+  </main>
 </div>
-
-<div class="card" id="detail" hidden>
-  <div class="box" id="weatherCard"></div>
-  <div class="box" id="riskCard"></div>
-</div>
-
-<div id="summary"></div>
-<div id="notice"></div>
-<div class="table-wrap">
-  <table id="list" hidden>
-    <thead><tr><th>Mesafe</th><th>Gözlem zamanı (İstanbul)</th><th>Güven</th><th>Uydu</th></tr></thead>
-    <tbody></tbody>
-  </table>
-</div>
-
-<footer>
-  Yangın verisi: <a href="https://firms.modaps.eosdis.nasa.gov/">NASA FIRMS</a>.
-  Hava verisi: <a href="https://open-meteo.com/">Open-Meteo.com</a> (CC BY 4.0).
-  Harita ve il/ilçe merkez noktaları: © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> katkıcıları, ODbL 1.0. Resmi sınır verisi değildir.
-  Her nokta uydunun o anki gözlemidir; "şu an yanıyor" anlamına gelmez.
-</footer>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script>
-// The server fills these in from its settings (TILE_URL, TILE_ATTRIBUTION).
-const TILE_URL = __TILE_URL__;
-const TILE_ATTRIBUTION = __TILE_ATTRIBUTION__;
-const SATELLITES = { N: "Suomi NPP", N20: "NOAA-20", N21: "NOAA-21", Terra: "Terra", Aqua: "Aqua" };
-const CONF_LABEL = { high: "yüksek", nominal: "orta", low: "düşük" };
-const CONF_COLOR = { high: "#b91c1c", nominal: "#ea580c", low: "#6b7280" };
-const LEVELS = {
-  low: ["Düşük", "#15803d"], moderate: ["Orta", "#b45309"], high: ["Yüksek", "#c2410c"],
-  very_high: ["Çok yüksek", "#b91c1c"], extreme: ["Aşırı", "#7f1d1d"],
-};
-const NO_WEATHER = "#9ca3af";
-const DRIVERS = { humidity: "kuru hava", wind: "güçlü rüzgar", temperature: "sıcak hava", rain: "yağışsız dönem" };
-const FRESHNESS = {
-  fresh:   ["Güncel", "Servis veriyi son 3 saat içinde güncelledi."],
-  warning: ["Gecikmiş", "Servis veriyi en son 3-6 saat önce güncelledi."],
-  stale:   ["Eski", "Servis veriyi 6 saatten uzun süredir güncelleyemedi. Bilgiler eski olabilir."],
-  unknown: ["Bilinmiyor", "Veri güncellemesi doğrulanamıyor."],
-};
-const SMALL_ZONE = (z) => z.total_frp_mw < 30 && z.detections < 5;
-const COMPASS = ["K", "KKD", "KD", "DKD", "D", "DGD", "GD", "GGD", "G", "GGB", "GB", "BGB", "B", "BKB", "KB", "KKB"];
-
-const fmt = new Intl.DateTimeFormat("tr-TR", { timeZone: "Europe/Istanbul", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-const decimal = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 1 });
-const $ = (id) => document.getElementById(id);
-function el(tag, text, className) {
-  const node = document.createElement(tag);
-  if (text !== undefined) node.textContent = text;
-  if (className) node.className = className;
-  return node;
-}
-function ago(minutes) {
-  const m = Math.max(0, Math.round(minutes));
-  if (m < 60) return m + " dk önce";
-  if (m < 1440) return Math.floor(m / 60) + " sa " + (m % 60) + " dk önce";
-  return Math.floor(m / 1440) + " gün önce";
-}
-const agoFromIso = (iso) => ago((Date.now() - new Date(iso).getTime()) / 60000);
-const satelliteName = (f) => (SATELLITES[f.satellite] || f.satellite) + " · " + f.instrument;
-function distanceKm(a, b, c, d) {
-  const r = Math.PI / 180, dLat = (c - a) * r, dLon = (d - b) * r;
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin(dLon / 2) ** 2;
-  return 12742 * Math.asin(Math.sqrt(h));
-}
-
-const map = L.map("map").setView([39, 35], 6);
-L.tileLayer(TILE_URL, { maxZoom: 18, attribution: TILE_ATTRIBUTION }).addTo(map);
-const zoneLayer = L.layerGroup().addTo(map);
-const detailLayer = L.layerGroup().addTo(map);
-let zones = [], point = null, zonesReq = 0, detailReq = 0;
-
-/* ---------- status ---------- */
-function renderStatus(d) {
-  const [label, explanation] = FRESHNESS[d.freshness] || FRESHNESS.unknown;
-  const box = $("status");
-  box.replaceChildren(el("span", label, "badge " + d.freshness), document.createTextNode(explanation));
-  box.appendChild(el("div", d.last_ingest_at
-    ? "Son başarılı güncelleme: " + fmt.format(new Date(d.last_ingest_at)) + " (" + agoFromIso(d.last_ingest_at) + ")"
-    : "Henüz başarılı bir güncelleme kaydı yok.", "line"));
-  box.appendChild(el("div", d.latest_observation_at
-    ? "Son uydu gözlemi: " + fmt.format(new Date(d.latest_observation_at)) + " (" + agoFromIso(d.latest_observation_at) + "). Uydular bölgeden günde birkaç kez geçer; saatlerce gözlem olmaması normaldir."
-    : "Veride henüz uydu gözlemi yok.", "line"));
-}
-
-/* ---------- active zones across Turkey ---------- */
-function levelBadge(risk) {
-  const [label, color] = risk ? (LEVELS[risk.level] || [risk.level, "#5b6470"]) : ["Hava yok", NO_WEATHER];
-  const badge = el("span", label, "lvl");
-  badge.style.background = color;
-  return badge;
-}
-
-function zonePopup(z) {
-  const box = document.createElement("div");
-  box.appendChild(el("strong", z.district + " / " + z.province));
-  box.appendChild(el("div", z.detections + " uydu tespiti · toplam " + decimal.format(z.total_frp_mw) + " MW · en güçlü " + decimal.format(z.max_frp_mw) + " MW"));
-  box.appendChild(el("div", "Son gözlem: " + ago(z.age_minutes)));
-  if (z.risk) {
-    const line = el("div", "Yangına elverişli hava (deneysel): ");
-    line.appendChild(levelBadge(z.risk));
-    box.appendChild(line);
-    box.appendChild(el("div", z.risk.drivers.length ? "Öne çıkan: " + z.risk.drivers.map((d) => DRIVERS[d] || d).join(", ") : "Öne çıkan etken yok", "small"));
-  } else {
-    box.appendChild(el("div", "Hava durumu şu an alınamadı.", "small"));
-  }
-  box.appendChild(el("div", "Yer adı en yakın ilçe merkezine göredir.", "small"));
-  return box;
-}
-
-function renderZones(data) {
-  zones = data.zones;
-  const showSmall = $("small").checked;
-  const shown = zones.filter((z) => showSmall || !SMALL_ZONE(z));
-  const hidden = zones.length - shown.length;
-  zoneLayer.clearLayers();
-  const list = $("zones");
-  list.replaceChildren();
-
-  for (const z of shown) {
-    const color = z.risk ? (LEVELS[z.risk.level] || [0, NO_WEATHER])[1] : NO_WEATHER;
-    const marker = L.circleMarker([z.latitude, z.longitude], {
-      radius: Math.min(22, 6 + Math.sqrt(z.total_frp_mw) / 1.6), color, weight: 2, fillColor: color, fillOpacity: 0.45,
-    }).bindPopup(() => zonePopup(z)).addTo(zoneLayer);
-
-    const button = el("button", undefined, "zone");
-    button.type = "button";
-    const title = el("div", undefined, "t");
-    title.append(document.createTextNode(z.district + " / " + z.province), levelBadge(z.risk));
-    button.append(title, el("div", z.detections + " tespit · " + decimal.format(z.total_frp_mw) + " MW · " + ago(z.age_minutes), "m"));
-    button.addEventListener("click", () => { marker.openPopup(); map.setView([z.latitude, z.longitude], 9); choose(z.latitude, z.longitude, 25); });
-    list.appendChild(button);
-  }
-  $("zonesTitle").textContent = "Aktif bölgeler (" + shown.length + ")";
-  if (!shown.length) {
-    list.appendChild(el("div", zones.length
-      ? "Büyük bir aktif bölge yok. " + hidden + " küçük bölge gizli; kutuyu işaretleyerek görebilirsiniz."
-      : "Son 24 saatte Türkiye'de uydu tespiti yok. Bu, yangın olmadığı anlamına gelmez: uydular her an gözlem yapmaz.", "small"));
-  } else if (hidden) {
-    list.appendChild(el("div", hidden + " küçük bölge (tarla yakması gibi olabilir) gizli.", "small"));
-  }
-  renderStatus(data.data_as_of);
-}
-
-async function loadZones() {
-  const id = ++zonesReq;
-  try {
-    const response = await fetch("/risk/zones?since_hours=24");
-    if (!response.ok) throw new Error("HTTP " + response.status);
-    const data = await response.json();
-    if (id === zonesReq) renderZones(data);
-  } catch (error) {
-    if (id === zonesReq) {
-      $("zones").replaceChildren(el("div", "Aktif bölgeler alınamadı (" + error.message + "). Gösterilen bilgi güncel olmayabilir.", "small"));
-    }
-  }
-}
-
-/* ---------- a chosen place ---------- */
-function choose(lat, lon, radiusKm) {
-  point = { lat, lon };
-  if (radiusKm) $("radius").value = String(radiusKm);
-  // The address keeps the place, so a link shares it: /?lat=39.9&lon=32.85&r=50
-  const link = new URLSearchParams({ lat: lat.toFixed(4), lon: lon.toFixed(4), r: $("radius").value });
-  if ($("small").checked) link.set("small", "1");
-  history.replaceState(null, "", "?" + link);
-  loadDetail();
-}
-
-function popupFor(f) {
-  const box = document.createElement("div");
-  box.appendChild(el("strong", "Uydu gözlemi"));
-  const rows = [
-    ["Gözlendi", fmt.format(new Date(f.acquired_at)) + " (" + ago(f.age_minutes) + ")"],
-    ["Uydu", satelliteName(f)],
-    ["Güven", CONF_LABEL[f.confidence_level] || f.confidence_level],
-    ["Mesafe", f.distance_km.toFixed(1) + " km"],
-  ];
-  if (f.frp != null) rows.push(["Isı gücü (FRP)", f.frp + " MW"]);
-  if (f.recurring) rows.push(["Not", "Burası neredeyse her gün tespit veriyor; fabrika, rafineri ya da çöplük gibi sabit bir ısı kaynağı olabilir"]);
-  for (const [k, v] of rows) box.appendChild(el("div", k + ": " + v));
-  return box;
-}
-
-function renderWeather(result) {
-  const box = $("weatherCard");
-  box.replaceChildren(el("h2", "Hava durumu (seçili nokta)"));
-  if (!result) { box.appendChild(el("div", "Hava durumu yalnızca Türkiye içindeki konumlar için gösterilir ya da şu an alınamadı.", "small")); return; }
-  const w = result.weather;
-  const stats = [
-    [decimal.format(w.temperature_c) + " °C", "sıcaklık"],
-    ["%" + Math.round(w.humidity_pct), "nem"],
-    [decimal.format(w.wind_speed_kmh) + " km/sa" + (w.wind_direction_deg != null ? " " + COMPASS[Math.round(w.wind_direction_deg / 22.5) % 16] : ""), "rüzgar"],
-    [decimal.format(w.precip_72h_mm) + " mm", "son 72 saat yağış"],
-  ];
-  for (const [value, label] of stats) {
-    const s = el("div", undefined, "stat");
-    s.append(el("b", value), el("span", label));
-    box.appendChild(s);
-  }
-  box.appendChild(el("div", "Ölçüm: " + fmt.format(new Date(w.observed_at)) + " (İstanbul), yaklaşık " + w.latitude.toFixed(1) + ", " + w.longitude.toFixed(1)
-    + " noktası" + (w.cache_status === "stale" ? ". Veri eski olabilir." : "") + " · Open-Meteo.com", "small"));
-}
-
-function renderRisk(nearest, radiusKm) {
-  const box = $("riskCard");
-  box.replaceChildren(el("h2", "Yangına elverişli hava (deneysel)"));
-  if (!nearest) {
-    box.appendChild(el("div", "Bu çevrede (" + radiusKm + " km) aktif bir tespit bölgesi yok, bu yüzden bir değer gösterilmiyor. "
-      + "Bu bölgenin güvenli olduğu anlamına gelmez; yalnızca anlatılacak bir tespit olmadığı anlamına gelir.", "small"));
-    return;
-  }
-  const { zone, km } = nearest;
-  const title = el("div");
-  title.append(document.createTextNode(zone.district + " / " + zone.province + " bölgesi (" + decimal.format(km) + " km uzakta): "));
-  if (zone.risk) {
-    title.appendChild(levelBadge(zone.risk));
-    title.appendChild(document.createTextNode(" " + decimal.format(zone.risk.score) + "/100"));
-    box.append(title, el("div", zone.risk.drivers.length ? "Öne çıkan etkenler: " + zone.risk.drivers.map((d) => DRIVERS[d] || d).join(", ") + "." : "Öne çıkan bir tehlike etkeni yok."));
-  } else {
-    box.append(title, el("div", "Bu bölge için hava durumu şu an alınamadı.", "small"));
-  }
-  box.appendChild(el("div", "Havanın yangın için ne kadar elverişli olduğunu gösterir (sıcak, kuru, rüzgarlı, yağışsız). Bir yangının ertesi gün sürüp sürmeyeceğini, yayılacağını ya da olasılığını tahmin etmez. "
-    + "Deneysel; geçmiş verilerle ne ölçüde işe yaradığı için Yöntem ve sınırlar sayfasına bakın. Bitki örtüsü, arazi ve kuraklık geçmişi hesaba katılmaz.", "small"));
-}
-
-function renderDetail(fires, weather) {
-  detailLayer.clearLayers();
-  const radiusKm = fires.query.radius_km;
-  L.marker([point.lat, point.lon]).addTo(detailLayer);
-  L.circle([point.lat, point.lon], { radius: radiusKm * 1000, color: "#2563eb", weight: 1, fillOpacity: 0.04, interactive: false }).addTo(detailLayer);
-
-  const recurring = (fires.recurring_sources || []).map((f) => ({ ...f, recurring: true }));
-  const all = fires.fires.concat(fires.low_confidence, recurring).sort((a, b) => a.distance_km - b.distance_km);
-  for (const f of all) {
-    // Hollow rings are weaker evidence: low confidence, or a spot that detects almost every day (a factory or flare).
-    const hollow = f.confidence_level === "low" || f.recurring;
-    L.circleMarker([f.latitude, f.longitude], {
-      radius: 6, color: f.recurring ? "#6b7280" : CONF_COLOR[f.confidence_level] || "#444", weight: hollow ? 2 : 1,
-      dashArray: f.recurring ? "3 3" : null, fillColor: CONF_COLOR[f.confidence_level] || "#444", fillOpacity: hollow ? 0.1 : 0.8,
-    }).bindPopup(popupFor(f)).addTo(detailLayer);
-  }
-
-  $("detail").hidden = false;
-  renderWeather(weather);
-  let nearest = null;
-  for (const z of zones) {
-    const km = distanceKm(point.lat, point.lon, z.latitude, z.longitude);
-    if (km <= radiusKm && (!nearest || km < nearest.km)) nearest = { zone: z, km };
-  }
-  renderRisk(nearest, radiusKm);
-
-  const hours = fires.query.since_hours;
-  $("summary").textContent = fires.count + " uydu tespiti (son " + hours + " saat, " + radiusKm + " km çevresinde)"
-    + (fires.low_confidence.length ? " · " + fires.low_confidence.length + " tanesi düşük güvenli" : "")
-    + (recurring.length ? " · " + recurring.length + " tanesi sabit kaynak olabilir" : "");
-  $("notice").textContent = fires.count === 0
-    ? "Bu alanda seçili sürede uydu tespiti yok. Bu, yangın olmadığı anlamına gelmez: uydular her an gözlem yapmaz ve bazı yangınları göremeyebilir."
-    : "Noktalar uydunun gözlem anını gösterir. Düşük güvenli tespitler içi boş çemberle, neredeyse her gün tespit veren yerler "
-      + "(fabrika, rafineri, çöplük gibi olası sabit ısı kaynakları) kesikli gri çemberle gösterilir; silinmez.";
-
-  const body = $("list").querySelector("tbody");
-  body.replaceChildren();
-  for (const f of all.slice(0, 100)) {
-    const tr = document.createElement("tr");
-    tr.appendChild(el("td", f.distance_km.toFixed(1) + " km"));
-    tr.appendChild(el("td", fmt.format(new Date(f.acquired_at)) + " (" + ago(f.age_minutes) + ")"));
-    const conf = el("td");
-    conf.appendChild(el("span", "", "conf " + f.confidence_level));
-    conf.appendChild(document.createTextNode((CONF_LABEL[f.confidence_level] || f.confidence_level) + (f.recurring ? " · sabit kaynak olabilir" : "")));
-    tr.appendChild(conf);
-    tr.appendChild(el("td", satelliteName(f)));
-    body.appendChild(tr);
-  }
-  $("list").hidden = all.length === 0;
-}
-
-async function loadDetail() {
-  if (!point) return;
-  const id = ++detailReq;
-  const fireParams = new URLSearchParams({
-    lat: point.lat.toFixed(5), lon: point.lon.toFixed(5), radius_km: $("radius").value, since_hours: $("since").value,
-  });
-  const weatherParams = new URLSearchParams({ lat: point.lat.toFixed(5), lon: point.lon.toFixed(5) });
-  $("notice").textContent = "Yükleniyor…";
-  try {
-    const [firesResponse, weatherResponse] = await Promise.all([fetch("/fires?" + fireParams), fetch("/weather?" + weatherParams)]);
-    if (!firesResponse.ok) throw new Error("HTTP " + firesResponse.status);
-    const fires = await firesResponse.json();
-    const weather = weatherResponse.ok ? await weatherResponse.json() : null;
-    if (id === detailReq) renderDetail(fires, weather);
-  } catch (error) {
-    if (id === detailReq) $("notice").textContent = "Veri alınamadı (" + error.message + "). Gösterilen bilgi güncel olmayabilir.";
-  }
-}
-
-/* ---------- place pickers ---------- */
-let places = [];
-const byTurkish = (a, b) => a.name.localeCompare(b.name, "tr");
-function fillOptions(select, items, firstLabel) {
-  select.replaceChildren(new Option(firstLabel, ""));
-  for (const item of items) select.appendChild(new Option(item.name, item.code ?? item.name));
-}
-function goTo(place, radiusKm, zoom) {
-  map.setView([place.lat, place.lon], zoom);
-  choose(place.lat, place.lon, radiusKm);
-}
-async function loadPlaces() {
-  try {
-    const response = await fetch("/static/ilceler.json");
-    if (!response.ok) throw new Error("HTTP " + response.status);
-    places = (await response.json()).provinces;
-    fillOptions($("province"), places.slice().sort(byTurkish), "Seçin…");
-  } catch (error) {
-    $("province").disabled = true;
-  }
-}
-const selectedProvince = () => places.find((p) => p.code === $("province").value);
-
-$("province").addEventListener("change", () => {
-  const province = selectedProvince();
-  const district = $("district");
-  if (!province) { fillOptions(district, [], "Tüm il"); district.disabled = true; return; }
-  fillOptions(district, province.districts.slice().sort(byTurkish), "Tüm il");
-  district.disabled = false;
-  goTo(province, 100, 8);
-});
-$("district").addEventListener("change", () => {
-  const province = selectedProvince();
-  if (!province) return;
-  const district = province.districts.find((d) => d.name === $("district").value);
-  if (district) goTo(district, 25, 10); else goTo(province, 100, 8);
-});
-map.on("click", (e) => choose(e.latlng.lat, e.latlng.lng));
-$("radius").addEventListener("change", loadDetail);
-$("since").addEventListener("change", loadDetail);
-$("small").addEventListener("change", () => loadZones());
-$("locate").addEventListener("click", () => {
-  if (!navigator.geolocation) { $("notice").textContent = "Tarayıcınız konum özelliğini desteklemiyor."; return; }
-  navigator.geolocation.getCurrentPosition(
-    (pos) => { map.setView([pos.coords.latitude, pos.coords.longitude], 9); choose(pos.coords.latitude, pos.coords.longitude, 50); },
-    () => { $("notice").textContent = "Konum alınamadı. İl/ilçe seçebilir ya da haritaya tıklayabilirsiniz."; },
-  );
-});
-
-/* ---------- start and keep fresh ---------- */
-loadPlaces();
-loadZones();
-(function openSharedPlace() {
-  const q = new URLSearchParams(location.search);
-  if (q.get("small") === "1") { $("small").checked = true; loadZones(); }
-  const lat = parseFloat(q.get("lat")), lon = parseFloat(q.get("lon")), r = q.get("r");
-  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return;
-  const valid = ["10", "25", "50", "100", "250", "500"].includes(r) ? r : "25";
-  map.setView([lat, lon], Number(valid) >= 250 ? 6 : Number(valid) >= 100 ? 8 : 9);
-  choose(lat, lon, Number(valid));
-})();
-setInterval(() => { if (!document.hidden) { loadZones(); if (point) loadDetail(); } }, 5 * 60 * 1000);
-document.addEventListener("visibilitychange", () => { if (!document.hidden) loadZones(); });
-</script>
+<div id="live" class="sr-only" role="status" aria-live="polite"></div>
+<noscript><p style="padding:16px">Kıvılcım haritasının çalışması için JavaScript gerekir. Acil durumda 112'yi arayın.</p></noscript>
 </body>
 </html>

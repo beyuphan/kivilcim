@@ -3,7 +3,7 @@
 > Bu dosya iki dilli: önce İngilizce, sonra Türkçe. Her iki bölüm de aynı içeriği taşır; değişiklikler ikisinde birlikte yapılır.
 > This file is bilingual: English first, then Turkish. Both sections carry the same content; changes are made in both together.
 >
-> Durum / Status: sürüm / version 0.1.0 (the plan below describes what was built and why, then what is left).
+> Durum / Status: sürüm / version 0.2.0 (the plan below describes what was built and why, then what is left).
 
 ---
 
@@ -22,7 +22,7 @@ It is **not an official warning system**. That is stated on every page and in ev
 
 ## 3. Scope
 
-**Built (v0.1.0):**
+**Built (v0.1.0, front end redone in v0.2.0):**
 
 1. Choose a place (province, district, map click, device location, shareable link). The backend takes only latitude and longitude.
 2. Recent detections within a radius, on a map and in a list, each with observation time, confidence, satellite and distance.
@@ -31,7 +31,7 @@ It is **not an official warning system**. That is stated on every page and in ev
 5. A responsibility note everywhere, and data freshness as two separate times.
 6. Automatic, repeated ingest with a visible record; one command runs everything.
 7. Always-on heat sources (factories, flares) flagged, never dropped.
-8. **Past fires:** big fires found in the archive, with a day-by-day spread map.
+8. **Past fires:** big fires found in the archive, each with the satellite image before and after (NASA GIBS, 30 m where a clear day exists) and a day-by-day spread map.
 9. A methodology page with the formulas, thresholds, licenses, privacy, limits and the measured results of the index.
 10. An installable app (PWA), a documented read-only API, and a hardened server.
 
@@ -176,7 +176,7 @@ Kıvılcım **resmi bir uyarı sistemi değildir**. Bu her sayfada ve her API ya
 
 ## 3. Kapsam
 
-**Yapılanlar (v0.1.0):**
+**Yapılanlar (v0.1.0, ön yüz v0.2.0'da yenilendi):**
 
 1. Yer seçimi (il, ilçe, harita tıklaması, cihaz konumu, paylaşılabilir bağlantı). Backend yalnızca enlem ve boylam alır.
 2. Yarıçap içindeki son tespitler, haritada ve listede; her biri gözlem zamanı, güven, uydu ve mesafe ile.
@@ -185,7 +185,7 @@ Kıvılcım **resmi bir uyarı sistemi değildir**. Bu her sayfada ve her API ya
 5. Her yerde sorumluluk notu ve iki ayrı zaman olarak veri tazeliği.
 6. Otomatik, tekrarlanan ve kaydı görünen ingest; tek komutla her şey çalışır.
 7. Sürekli ateşli ısı kaynakları (fabrika, meşale) işaretlenir, silinmez.
-8. **Geçmiş yangınlar:** arşivde bulunan büyük yangınlar, gün gün yayılma haritasıyla.
+8. **Geçmiş yangınlar:** arşivde bulunan büyük yangınlar; her biri için yangından önceki ve sonraki uydu görüntüsü (NASA GIBS, açık gün varsa 30 m) ve gün gün yayılma haritası.
 9. Formülleri, eşikleri, lisansları, gizliliği, sınırları ve indeksin ölçülmüş sonuçlarını içeren bir yöntem sayfası.
 10. Kurulabilir uygulama (PWA), belgelenmiş salt okunur API ve sağlamlaştırılmış sunucu.
 
