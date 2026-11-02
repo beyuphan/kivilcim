@@ -20,20 +20,23 @@ from datetime import date, timedelta
 
 import httpx
 
-ATTRIBUTION = "Imagery: NASA GIBS / ESDIS (Harmonized Landsat Sentinel-2, VIIRS)"
+ATTRIBUTION = "Imagery: NASA GIBS / ESDIS (Harmonized Landsat Sentinel-2, VIIRS, MODIS)"
 
 WMTS = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/{layer}/default/{date}/GoogleMapsCompatible_Level{level}/{{z}}/{{y}}/{{x}}.{ext}"
 WMS = "https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi"
 
 SEARCH_DAYS_BEFORE = 21
 SEARCH_DAYS_AFTER = 28
-MIN_GAP_AFTER = 1  # the "after" image is at least this many days after the last detection
+MIN_GAP_AFTER = 3  # the "after" image is at least this many days after the last fire activity: a fire
+# that has just gone out still smokes, and a burn scar shows more clearly once the smoke has gone
 LATENCY_DAYS = 2  # GIBS publishes a day or two late
 PROBE_ZOOM = 10  # one tile of about 39 km at the equator; enough to judge a place
 MIN_VALID = 0.85  # share of the tile that holds data
 CLEAR_CLOUD = 0.10  # at most this much cloud counts as a clear image
 USABLE_CLOUD = 0.35  # above this an image is too cloudy to use as a first choice
 WORKERS = 8
+OPTIONS_PER_SIDE = 5  # other usable days offered next to the chosen one
+RETRIES = 2
 
 
 @dataclass(frozen=True)
@@ -48,6 +51,11 @@ class Layer:
 HLS_S30 = Layer("HLS_S30_Nadir_BRDF_Adjusted_Reflectance", "Sentinel-2", 30, 12, "png")
 HLS_L30 = Layer("HLS_L30_Nadir_BRDF_Adjusted_Reflectance", "Landsat", 30, 12, "png")
 VIIRS = Layer("VIIRS_SNPP_CorrectedReflectance_TrueColor", "VIIRS", 250, 9, "jpg")
+VIIRS_N20 = Layer("VIIRS_NOAA20_CorrectedReflectance_TrueColor", "VIIRS NOAA-20", 250, 9, "jpg")
+MODIS_TERRA = Layer("MODIS_Terra_CorrectedReflectance_TrueColor", "MODIS Terra", 250, 9, "jpg")
+MODIS_AQUA = Layer("MODIS_Aqua_CorrectedReflectance_TrueColor", "MODIS Aqua", 250, 9, "jpg")
+# Four daily 250 m images from satellites that pass at different hours, so one of them is often clear.
+COARSE_LAYERS = (VIIRS, VIIRS_N20, MODIS_TERRA, MODIS_AQUA)
 SHARP_LAYERS = (HLS_S30, HLS_L30)
 
 
@@ -57,6 +65,7 @@ class Candidate:
     layer: Layer
     valid: float  # 0..1, the share of the tile that has data
     cloud: float  # 0..1, the share of the data that looks like cloud
+    failed: bool = False  # the service did not answer, so "no data" may be wrong
 
     @property
     def quality(self) -> str:
@@ -209,14 +218,21 @@ def measure(rows: list[bytes]) -> tuple[float, float]:
 # ---- probing GIBS -----------------------------------------------------------
 
 
-def probe_sharp(client: httpx.Client, layer: Layer, day: date, lat: float, lon: float) -> Candidate:
-    """Download one tile of a 30 m layer on one day and measure it. Missing data is valid=0."""
-    x, y = tile_for(lat, lon, PROBE_ZOOM)
-    url = tile_template(layer, day).format(z=PROBE_ZOOM, y=y, x=x)
-    try:
-        response = client.get(url)
-    except httpx.HTTPError:
-        return Candidate(day, layer, 0.0, 0.0)
+def _fetch(client: httpx.Client, url: str, params: dict | None = None) -> httpx.Response | None:
+    """A GET that is tried again after a network error or a server error. None if it never worked."""
+    for _ in range(RETRIES):
+        try:
+            response = client.get(url, params=params)
+        except httpx.HTTPError:
+            continue
+        if response.status_code < 500 and response.status_code != 429:
+            return response
+    return None
+
+
+def _measure(response: httpx.Response | None, layer: Layer, day: date) -> Candidate:
+    if response is None:
+        return Candidate(day, layer, 0.0, 0.0, failed=True)
     decoded = decode_png(response.content) if response.status_code == 200 else None
     if decoded is None:
         return Candidate(day, layer, 0.0, 0.0)
@@ -224,26 +240,27 @@ def probe_sharp(client: httpx.Client, layer: Layer, day: date, lat: float, lon: 
     return Candidate(day, layer, valid, cloud)
 
 
-def probe_viirs(client: httpx.Client, day: date, lat: float, lon: float) -> Candidate:
-    """The same for the daily 250 m layer, asked for as a PNG through the WMS so it can be measured."""
+def probe_sharp(client: httpx.Client, layer: Layer, day: date, lat: float, lon: float) -> Candidate:
+    """Download one tile of a 30 m layer on one day and measure it. Missing data is valid=0."""
+    x, y = tile_for(lat, lon, PROBE_ZOOM)
+    url = tile_template(layer, day).format(z=PROBE_ZOOM, y=y, x=x)
+    return _measure(_fetch(client, url), layer, day)
+
+
+def probe_coarse(client: httpx.Client, layer: Layer, day: date, lat: float, lon: float) -> Candidate:
+    """The same for a daily 250 m layer, asked for as a PNG through the WMS so it can be measured."""
     x, y = tile_for(lat, lon, 8)
     left, bottom, right, top = tile_bbox(8, x, y)
-    try:
-        response = client.get(
-            WMS,
-            params={
-                "SERVICE": "WMS", "REQUEST": "GetMap", "VERSION": "1.1.1", "LAYERS": VIIRS.id, "STYLES": "",
-                "SRS": "EPSG:3857", "BBOX": f"{left},{bottom},{right},{top}", "WIDTH": 256, "HEIGHT": 256,
-                "FORMAT": "image/png", "TIME": day.isoformat(),
-            },
-        )
-    except httpx.HTTPError:
-        return Candidate(day, VIIRS, 0.0, 0.0)
-    decoded = decode_png(response.content) if response.status_code == 200 else None
-    if decoded is None:
-        return Candidate(day, VIIRS, 0.0, 0.0)
-    valid, cloud = measure(decoded[2])
-    return Candidate(day, VIIRS, valid, cloud)
+    params = {
+        "SERVICE": "WMS", "REQUEST": "GetMap", "VERSION": "1.1.1", "LAYERS": layer.id, "STYLES": "",
+        "SRS": "EPSG:3857", "BBOX": f"{left},{bottom},{right},{top}", "WIDTH": 256, "HEIGHT": 256,
+        "FORMAT": "image/png", "TIME": day.isoformat(),
+    }
+    return _measure(_fetch(client, WMS, params), layer, day)
+
+
+def probe_viirs(client: httpx.Client, day: date, lat: float, lon: float) -> Candidate:
+    return probe_coarse(client, VIIRS, day, lat, lon)
 
 
 def choose(candidates: list[Candidate], nearest_to: date) -> Candidate | None:
@@ -289,6 +306,19 @@ def _describe(candidate: Candidate | None, label: str) -> dict | None:
     }
 
 
+def options_for(chosen: Candidate | None, gathered: list[Candidate], nearest_to: date, label: str) -> list[dict]:
+    """The chosen image and other usable days (one image per day, the clearest), in date order."""
+    if chosen is None or chosen.layer not in SHARP_LAYERS:
+        return []
+    best: dict[date, Candidate] = {}
+    for c in gathered:
+        if c.layer in SHARP_LAYERS and c.valid >= MIN_VALID and c.cloud <= USABLE_CLOUD and c.day != chosen.day:
+            if c.day not in best or c.score > best[c.day].score:
+                best[c.day] = c
+    others = sorted(best.values(), key=lambda c: (abs((c.day - nearest_to).days), -c.score))[: OPTIONS_PER_SIDE - 1]
+    return [_describe(c, label) for c in sorted([chosen, *others], key=lambda c: c.day)]
+
+
 def find_before_after(
     lat: float,
     lon: float,
@@ -298,17 +328,23 @@ def find_before_after(
     client: httpx.Client | None = None,
     workers: int = WORKERS,
     progress: Callable[[str], None] | None = None,
+    quiet_from: date | None = None,
 ) -> dict:
     """The imagery to show for an event: one image from before it began and one from after it ended.
 
-    Each side is searched outward from the event in weekly steps, so a clear image nearby ends the
-    search early. Where no 30 m image is usable, the 250 m VIIRS image is used and flagged.
+    `quiet_from` is the last day any fire was seen at the place. Fires often burn on after the event
+    as it was grouped, so the "after" image is taken MIN_GAP_AFTER days after that. Each side is
+    searched outward in weekly steps, so a clear image nearby ends the search early. Where no 30 m
+    image is usable, the best of four daily 250 m images is used and flagged. `incomplete` says the
+    service failed to answer for some days, so the result should be looked at again soon, and
+    `waiting` that the after image cannot exist yet.
     """
     own = client is None
     http = client or httpx.Client(timeout=15, headers={"User-Agent": "kivilcim-imagery"})
     last_day = today - timedelta(days=LATENCY_DAYS)
+    after_from = max(end, quiet_from or end) + timedelta(days=MIN_GAP_AFTER)
     try:
-        with ThreadPoolExecutor(max_workers=workers) as pool:
+        with ThreadPoolExecutor(max_workers=workers) as pool, ThreadPoolExecutor(max_workers=2) as sides:
 
             def search(days: list[date], nearest_to: date) -> tuple[Candidate | None, list[Candidate]]:
                 gathered: list[Candidate] = []
@@ -321,35 +357,48 @@ def find_before_after(
                         break
                 return choose(gathered, nearest_to), gathered
 
+            def fallback(days: list[date], nearest_to: date) -> tuple[Candidate | None, list[Candidate]]:
+                nearest = sorted(days, key=lambda d: abs((d - nearest_to).days))[:6]
+                jobs = [(layer, d) for d in nearest for layer in COARSE_LAYERS]
+                found = list(pool.map(lambda job: probe_coarse(http, job[0], job[1], lat, lon), jobs))
+                return choose(found, nearest_to), found
+
+            def one_side(days: list[date], nearest_to: date) -> tuple[Candidate | None, list[Candidate], bool]:
+                if not days:
+                    return None, [], False
+                picked, gathered = search(days, nearest_to)
+                low = False
+                if picked is None or picked.quality in ("cloudy", "partial"):
+                    alt, extra = fallback(days, nearest_to)
+                    gathered = gathered + extra
+                    if alt and (picked is None or alt.score > picked.score):
+                        picked, low = alt, True
+                return picked, gathered, low
+
             before_days = [start - timedelta(days=i) for i in range(1, SEARCH_DAYS_BEFORE + 1)]
             after_days = [
-                end + timedelta(days=i) for i in range(MIN_GAP_AFTER, SEARCH_DAYS_AFTER + 1)
-                if end + timedelta(days=i) <= last_day
+                after_from + timedelta(days=i)
+                for i in range(SEARCH_DAYS_AFTER)
+                if after_from + timedelta(days=i) <= last_day
             ]
-            before, _ = search(before_days, start)
-            after, _ = search(after_days, end) if after_days else (None, [])
-
-            def fallback(days: list[date], nearest_to: date) -> Candidate | None:
-                nearest = sorted(days, key=lambda d: abs((d - nearest_to).days))[:6]
-                found = list(pool.map(lambda d: probe_viirs(http, d, lat, lon), nearest))
-                return choose(found, nearest_to)
-
-            before_low = after_low = False
-            if before is None or before.quality in ("cloudy", "partial"):
-                alt = fallback(before_days, start)
-                if alt and (before is None or alt.score > before.score):
-                    before, before_low = alt, True
-            if after_days and (after is None or after.quality in ("cloudy", "partial")):
-                alt = fallback(after_days, end)
-                if alt and (after is None or alt.score > after.score):
-                    after, after_low = alt, True
+            job_before = sides.submit(one_side, before_days, start)
+            job_after = sides.submit(one_side, after_days, after_from)
+            before, before_all, before_low = job_before.result()
+            after, after_all, after_low = job_after.result()
     finally:
         if own:
             http.close()
 
-    result = {"before": _describe(before, "Öncesi"), "after": _describe(after, "Sonrası"), "attribution": ATTRIBUTION}
-    result["low_resolution"] = before_low or after_low
-    return result
+    return {
+        "before": _describe(before, "Öncesi"),
+        "after": _describe(after, "Sonrası"),
+        "before_options": options_for(before, before_all, start, "Öncesi"),
+        "after_options": options_for(after, after_all, after_from, "Sonrası"),
+        "attribution": ATTRIBUTION,
+        "low_resolution": before_low or after_low,
+        "incomplete": any(c.failed for c in before_all + after_all),
+        "waiting": not after_days,
+    }
 
 
 def to_dict(candidate: Candidate) -> dict:

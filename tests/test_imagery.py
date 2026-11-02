@@ -350,18 +350,82 @@ def test_the_nearest_clear_days_on_each_side_are_found():
 
 
 @respx.mock
-def test_an_image_on_the_day_of_the_event_is_never_used():
-    # The days inside the event (7 to 10 September) are skipped on purpose: the "before" starts
-    # the day before the first detection and the "after" the day after the last.
-    respx.route(**GIBS).mock(side_effect=archive(clear_days={"2026-09-07", "2026-09-08", "2026-09-10", "2026-09-05", "2026-09-12"}))
+def test_days_inside_the_event_and_just_after_it_are_never_used():
+    # The event ran 7 to 10 September. The "before" starts the day before the first detection; the
+    # "after" waits three days after the last, because a fire that just went out still smokes.
+    respx.route(**GIBS).mock(
+        side_effect=archive(
+            clear_days={"2026-09-07", "2026-09-08", "2026-09-10", "2026-09-05", "2026-09-11", "2026-09-12", "2026-09-14"},
+            viirs_days=set(),
+        )
+    )
     result = find()
-    assert result["before"]["date"] == "2026-09-05" and result["after"]["date"] == "2026-09-12"
+    assert result["before"]["date"] == "2026-09-05" and result["after"]["date"] == "2026-09-14"
+
+
+@respx.mock
+def test_the_after_image_waits_for_a_fire_that_burned_on():
+    respx.route(**GIBS).mock(side_effect=archive(clear_days={"2026-09-13", "2026-09-17"}, viirs_days=set()))
+    # Fires were still seen there until 14 September, so the image is taken from 17 September on.
+    result = find(quiet_from=date(2026, 9, 14))
+    assert result["after"]["date"] == "2026-09-17"
+
+
+@respx.mock
+def test_too_soon_after_a_fire_there_is_no_after_image_yet():
+    respx.route(**GIBS).mock(side_effect=archive(clear_days={"2026-10-31"}))
+    with httpx.Client() as client:
+        result = find_before_after(37.45, 35.45, date(2026, 10, 25), date(2026, 10, 31), today=date(2026, 11, 2), client=client)
+    assert result["after"] is None and result["waiting"] is True
+
+
+@respx.mock
+def test_other_usable_days_are_offered_next_to_the_chosen_one():
+    respx.route(**GIBS).mock(
+        side_effect=archive(clear_days={"2026-09-06"}, cloudy_days={"2026-09-04", "2026-09-02"}, viirs_days=set())
+    )
+    result = find()
+    days = [o["date"] for o in result["before_options"]]
+    assert "2026-09-06" in days and days == sorted(days)
+    assert all(o["resolution_m"] == 30 and o["label"] == "Öncesi" for o in result["before_options"])
+    assert result["after_options"] == [] or all(o["label"] == "Sonrası" for o in result["after_options"])
+
+
+@respx.mock
+def test_a_service_that_failed_to_answer_is_reported_as_incomplete():
+    respx.route(**GIBS).mock(side_effect=httpx.ConnectError("down"))
+    assert find()["incomplete"] is True
+
+
+@respx.mock
+def test_a_failed_request_is_tried_again():
+    calls = {"n": 0}
+
+    def flaky(request):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(503)
+        return httpx.Response(200, content=CLEAR)
+
+    respx.route(**GIBS).mock(side_effect=flaky)
+    with httpx.Client() as client:
+        result = probe_sharp(client, HLS_S30, date(2026, 9, 6), 37.0, 35.0)
+    assert result.valid == 1.0 and result.failed is False and calls["n"] == 2
+
+
+@respx.mock
+def test_the_coarse_fallback_looks_at_four_satellites():
+    requests = []
+    respx.route(**GIBS).mock(side_effect=archive(viirs_days={"2026-09-06"}, requests=requests))
+    find()
+    layers = {httpx.URL(u).params["LAYERS"] for u in requests if "/wms/" in u}
+    assert layers == {layer.id for layer in imagery.COARSE_LAYERS}
 
 
 @respx.mock
 def test_a_nearby_clear_image_ends_the_search_early():
     requests = []
-    respx.route(**GIBS).mock(side_effect=archive(clear_days={"2026-09-06", "2026-09-11"}, requests=requests))
+    respx.route(**GIBS).mock(side_effect=archive(clear_days={"2026-09-06", "2026-09-14"}, requests=requests))
     find()
     # One week on each side, both satellites: 2 sides x 7 days x 2 layers = 28 at the most.
     assert len(requests) <= 28
@@ -552,3 +616,54 @@ def test_the_imagery_path_belongs_to_the_imagery_bucket():
     assert bucket_for("/events/20260907-374_355/imagery") == "imagery"
     assert bucket_for("/events/20260907-374_355") == "general"
     assert bucket_for("/events") == "general"
+
+
+@respx.mock
+def test_a_fire_still_seen_after_the_event_moves_the_after_image_later(session_factory):
+    respx.route(**GIBS).mock(side_effect=archive(clear_days={"2026-09-05", "2026-09-13", "2026-09-20"}, viirs_days=set()))
+    seed_event(session_factory)
+    with session_factory() as s:  # one more weak detection next to the event, eight days after it ended
+        s.add(
+            FireDetection(
+                source="VIIRS_SNPP_SP", satellite="N", instrument="VIIRS", latitude=37.47, longitude=35.46,
+                acquired_at=datetime(2026, 9, 17, 10, tzinfo=UTC), confidence_raw="n", confidence_level="nominal",
+                brightness=330.0, frp=8.0, ingested_at=NOW,
+            )
+        )
+        s.commit()
+    client = make_client(session_factory)
+    event_id = client.get("/events").json()["events"][0]["id"]
+    body = client.get(f"/events/{event_id}/imagery").json()
+    assert body["after"]["date"] == "2026-09-20"  # 17 September plus three days, not 13 September
+    assert [o["date"] for o in body["after_options"]] == ["2026-09-20"] or body["after"] in body["after_options"]
+
+
+@respx.mock
+def test_the_images_of_big_fires_can_be_searched_ahead_of_time(session_factory):
+    requests = []
+    respx.route(**GIBS).mock(side_effect=archive(clear_days={"2026-09-05", "2026-09-13"}, requests=requests))
+    seed_event(session_factory)
+    client = make_client(session_factory)
+    client.app.state.warm_imagery()
+    made = len(requests)
+    assert made > 0
+    event_id = client.get("/events").json()["events"][0]["id"]
+    assert client.get(f"/events/{event_id}/imagery").json()["before"]["date"] == "2026-09-05"
+    assert len(requests) == made  # answered from what was stored
+
+
+@respx.mock
+def test_a_choice_stored_by_an_older_version_is_searched_again(session_factory):
+    from kivilcim.models import EventImagery
+
+    requests = []
+    respx.route(**GIBS).mock(side_effect=archive(clear_days={"2026-09-05", "2026-09-13"}, requests=requests))
+    seed_event(session_factory)
+    client = make_client(session_factory)
+    event_id = client.get("/events").json()["events"][0]["id"]
+    old = {"before": None, "after": None, "attribution": "x", "low_resolution": False}
+    with session_factory() as s:
+        s.add(EventImagery(event_id=event_id, computed_at=NOW, ttl_seconds=10**9, payload=json.dumps(old)))
+        s.commit()
+    body = client.get(f"/events/{event_id}/imagery").json()
+    assert requests and body["before"]["date"] == "2026-09-05"

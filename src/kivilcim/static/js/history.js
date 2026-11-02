@@ -28,7 +28,7 @@ function schedule(id, signal) {
 }
 
 function pump() {
-  while (running < 2 && queue.length) {
+  while (running < 3 && queue.length) {
     const job = queue.shift();
     if (job.signal?.aborted) { done.delete(job.id); job.resolve(null); continue; }
     running += 1;

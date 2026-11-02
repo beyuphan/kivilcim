@@ -11,7 +11,6 @@ export function describe(image) {
 }
 
 export function createCompare(map, mapwrap, imagery, { onReady = () => {} } = {}) {
-  const sides = [];
   let ratio = 0.5;
   let pending = 0;
 
@@ -24,8 +23,8 @@ export function createCompare(map, mapwrap, imagery, { onReady = () => {} } = {}
     attribution: imagery.attribution,
   });
 
-  const before = imagery.before ? layerFor(imagery.before) : null;
-  const after = imagery.after ? layerFor(imagery.after) : null;
+  let before = imagery.before ? layerFor(imagery.before) : null;
+  let after = imagery.after ? layerFor(imagery.after) : null;
 
   const wait = el("div", { class: "compare-wait", role: "status" }, "Uydu görüntüleri yükleniyor…");
   const handle = el("button", {
@@ -63,12 +62,12 @@ export function createCompare(map, mapwrap, imagery, { onReady = () => {} } = {}
     });
   }
 
-  [before, after].forEach((layer) => { if (layer) { layer.addTo(map); sides.push(layer); track(layer); } });
+  [before, after].forEach((layer) => { if (layer) { layer.addTo(map); track(layer); } });
   mapwrap.append(overlay);
   map.on("move zoom resize viewreset", clip);
   clip();
   // The layers' containers exist only after adding; clip once more when the first tiles arrive.
-  sides.forEach((layer) => layer.once("tileloadstart", clip));
+  [before, after].forEach((layer) => layer?.once("tileloadstart", clip));
 
   // ---- dragging and keys -----------------------------------------------------------------------
   const setRatio = (value) => { ratio = Math.min(Math.max(value, 0.02), 0.98); clip(); };
@@ -98,12 +97,28 @@ export function createCompare(map, mapwrap, imagery, { onReady = () => {} } = {}
 
   wait.hidden = pending === 0;
 
+  /** Show another day on one side. */
+  function swap(side, image) {
+    const old = side === "before" ? before : after;
+    const next = layerFor(image);
+    if (side === "before") before = next;
+    else after = next;
+    next.addTo(map);
+    track(next);
+    next.once("tileloadstart", clip);
+    if (old) map.removeLayer(old);
+    const node = overlay.querySelector(`.compare-label[data-side="${side}"]`);
+    if (node) node.replaceWith(label(side, image));
+    clip();
+  }
+
   return {
     setRatio,
+    swap,
     destroy() {
       map.off("move zoom resize viewreset", clip);
       map.dragging.enable();
-      sides.forEach((layer) => map.removeLayer(layer));
+      [before, after].forEach((layer) => layer && map.removeLayer(layer));
       overlay.remove();
     },
   };

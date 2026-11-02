@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 120
     rate_limit_weather_per_minute: int = 30
     # Finding satellite images for an event downloads many tiles, so that is limited too.
-    rate_limit_imagery_per_minute: int = 10
+    rate_limit_imagery_per_minute: int = 60
     # Behind a reverse proxy, take the client address from X-Forwarded-For. Only turn this on when
     # a proxy you control sets that header; otherwise a client could pick its own address.
     trust_proxy: bool = False

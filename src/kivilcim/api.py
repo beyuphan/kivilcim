@@ -238,6 +238,9 @@ class EventImageryResponse(BaseModel):
     before: ImageOut | None
     after: ImageOut | None
     low_resolution: bool  # at least one side is the coarse 250 m daily image
+    before_options: list[ImageOut] = []  # other usable days to choose from, in date order
+    after_options: list[ImageOut] = []
+    waiting: bool = False  # the after image cannot exist yet: too soon after the fire
     attribution: str
     note: str
     disclaimer: str
@@ -251,6 +254,8 @@ IMAGERY_NOTE = (
 # because a new image may have been published since.
 IMAGERY_FINAL_SECONDS = 400 * 86400
 IMAGERY_RETRY_SECONDS = 6 * 3600
+IMAGERY_WAITING_SECONDS = 3 * 3600
+IMAGERY_VERSION = 2  # stored choices of an older version are looked for again
 IMAGERY_FAILED_SECONDS = 15 * 60
 
 MAX_EVENT_DETECTIONS = 5000
@@ -427,7 +432,7 @@ def create_app(
         if ingest_every:
             ingest_client = httpx.Client(timeout=60)
             scheduler = IngestScheduler(
-                make_ingest_job(session_factory, settings, ingest_client, after=warm_weather), ingest_every * 60
+                make_ingest_job(session_factory, settings, ingest_client, after=after_ingest), ingest_every * 60
             )
             scheduler.start()
             log.info("automatic ingest started: every %d minutes", ingest_every)
@@ -837,6 +842,65 @@ def create_app(
 
     imagery_lock = threading.Lock()
 
+    def last_activity(session: Session, event: Event) -> date:
+        """The last day a fire of some strength was seen near the center of the event. Fires often go
+        on after the event as it was grouped (its length is capped), and an "after" image should be
+        taken once they are out. Only the area the image shows counts, only detections of at least
+        5 MW (the weakest are crop burning and noise), and only up to two weeks past the event, so
+        a place that burns all season still gets an image."""
+        first = datetime(event.start.year, event.start.month, event.start.day, tzinfo=timezone.utc)
+        limit = datetime(event.end.year, event.end.month, event.end.day, tzinfo=timezone.utc) + timedelta(days=15)
+        last = session.scalar(
+            select(func.max(FireDetection.acquired_at)).where(
+                FireDetection.latitude.between(event.center_lat - 0.12, event.center_lat + 0.12),
+                FireDetection.longitude.between(event.center_lon - 0.15, event.center_lon + 0.15),
+                FireDetection.acquired_at >= first,
+                FireDetection.acquired_at < limit,
+                FireDetection.confidence_level != "low",
+                FireDetection.frp >= 5,
+            )
+        )
+        return max(event.end, last.date()) if last else event.end
+
+    def imagery_for(session: Session, event: Event) -> dict:
+        """The stored image choice for an event, searched and stored first if there is none yet."""
+        now = clock()
+
+        def stored() -> dict | None:
+            row = session.get(EventImagery, event.id)
+            if row and (now - row.computed_at).total_seconds() < row.ttl_seconds:
+                payload = json.loads(row.payload)
+                if payload.get("v") == IMAGERY_VERSION:
+                    return payload
+            return None
+
+        payload = stored()
+        if payload is not None:
+            return payload
+        with imagery_lock:  # one search at a time: it is heavy, and two would repeat each other
+            session.expire_all()
+            payload = stored()
+            if payload is not None:
+                return payload
+            payload = find_before_after(
+                event.center_lat, event.center_lon, event.start, event.end, now.date(),
+                quiet_from=last_activity(session, event),
+            )
+            payload["v"] = IMAGERY_VERSION
+            both_clear = all(payload[s] and payload[s]["quality"] == "clear" for s in ("before", "after"))
+            nothing = payload["before"] is None and payload["after"] is None
+            if payload["incomplete"] or nothing:
+                ttl = IMAGERY_FAILED_SECONDS
+            elif payload["waiting"]:
+                ttl = IMAGERY_WAITING_SECONDS
+            elif both_clear and not payload["low_resolution"]:
+                ttl = IMAGERY_FINAL_SECONDS
+            else:
+                ttl = IMAGERY_RETRY_SECONDS
+            session.merge(EventImagery(event_id=event.id, computed_at=now, ttl_seconds=ttl, payload=json.dumps(payload)))
+            session.commit()
+            return payload
+
     @app.get("/events/{event_id}/imagery", response_model=EventImageryResponse)
     def event_imagery(
         event_id: str,
@@ -844,45 +908,50 @@ def create_app(
         session: Session = Depends(get_session),
     ) -> EventImageryResponse:
         """The satellite images to compare for an event: the nearest clear one before it began and
-        after it ended. The search downloads tiles, so the choice is stored and reused."""
+        one taken a few days after the last fire there went out, with other usable days to choose
+        from. The search downloads tiles, so the choice is stored and reused."""
         event = next((e for e in all_events(session) if e.id == event_id), None)
         if event is None:
             raise HTTPException(status_code=404, detail="Event not found.")
-
-        now = clock()
-
-        def stored() -> dict | None:
-            row = session.get(EventImagery, event_id)
-            if row and (now - row.computed_at).total_seconds() < row.ttl_seconds:
-                return json.loads(row.payload)
-            return None
-
-        payload = stored()
-        if payload is None:
-            with imagery_lock:  # one search at a time: it is heavy, and two would repeat each other
-                session.expire_all()
-                payload = stored()
-                if payload is None:
-                    payload = find_before_after(event.center_lat, event.center_lon, event.start, event.end, now.date())
-                    both_clear = all(payload[s] and payload[s]["quality"] == "clear" for s in ("before", "after"))
-                    nothing = payload["before"] is None and payload["after"] is None
-                    ttl = (
-                        IMAGERY_FINAL_SECONDS if both_clear and not payload["low_resolution"]
-                        else IMAGERY_FAILED_SECONDS if nothing
-                        else IMAGERY_RETRY_SECONDS
-                    )
-                    session.merge(EventImagery(event_id=event_id, computed_at=now, ttl_seconds=ttl, payload=json.dumps(payload)))
-                    session.commit()
+        payload = imagery_for(session, event)
         response.headers["Cache-Control"] = "public, max-age=300"
         return EventImageryResponse(
             event_id=event_id,
             before=payload["before"],
             after=payload["after"],
             low_resolution=payload["low_resolution"],
+            before_options=payload.get("before_options", []),
+            after_options=payload.get("after_options", []),
+            waiting=payload.get("waiting", False),
             attribution=payload["attribution"],
             note=IMAGERY_NOTE,
             disclaimer=DISCLAIMER,
         )
+
+    warm_state = {"running": False}
+
+    def warm_imagery(limit: int = 40) -> None:
+        """Search the images of the biggest fires ahead of time, one after another, so the history
+        pages open at once. Runs in the background after each update."""
+        if warm_state["running"]:
+            return
+        warm_state["running"] = True
+        try:
+            with session_factory() as session:
+                big = sorted((e for e in all_events(session) if e.in_turkey), key=lambda e: -e.total_frp)[:limit]
+                for event in big:
+                    try:
+                        imagery_for(session, event)
+                    except Exception:
+                        log.exception("could not search the images of %s", event.id)
+        finally:
+            warm_state["running"] = False
+
+    def after_ingest() -> None:
+        warm_weather()
+        threading.Thread(target=warm_imagery, name="warm-imagery", daemon=True).start()
+
+    app.state.warm_imagery = warm_imagery
 
     app.state.warm_weather = warm_weather  # also lets tests and tools call it
     app.mount("/static", AssetFiles(directory=STATIC_DIR), name="static")

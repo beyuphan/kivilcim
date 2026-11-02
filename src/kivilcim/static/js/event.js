@@ -113,6 +113,9 @@ export function mount(ctx, params) {
       return;
     }
     const { before, after } = imagery;
+    if (!after && imagery.waiting) {
+      imageryBox.append(el("p", { class: "card-sub" }, "Sonrası görüntüsü henüz yok: yangın söndükten sonra dumanın dağılması için birkaç gün beklenir ve uydu görüntüleri 1-2 gün geç yayımlanır. Birkaç gün sonra yeniden bakın."));
+    }
     if (!before && !after) {
       imageryBox.append(el("p", { class: "card-title" }, "Bu yangın için kullanılabilir uydu görüntüsü bulunamadı"),
         el("p", { class: "card-sub", style: { marginTop: "6px" } }, "Bu tarihlerde bulutsuz ya da yayımlanmış görüntü yok. Yangın çok yeniyse birkaç gün sonra yeniden bakın."));
@@ -121,6 +124,9 @@ export function mount(ctx, params) {
     imageryBox.append(
       el("p", { class: "card-sub" }, "Haritadaki çizgiyi sağa sola sürükleyin. Soldaki yangından önce, sağdaki sonra."),
       el("div", { class: "compare-cards", style: { marginTop: "12px" } }, side(before, "Öncesi"), side(after, "Sonrası")));
+    for (const [key, list, current] of [["before", imagery.before_options, before], ["after", imagery.after_options, after]]) {
+      if (list?.length > 1) imageryBox.append(dateChips(key, list, current));
+    }
     if (imagery.low_resolution) {
       imageryBox.append(el("p", { class: "card-sub", style: { marginTop: "12px" } }, "Bir taraf düşük çözünürlüklü (250 m) günlük görüntü. Bu tarihlerde 30 m çözünürlükte kullanılabilir bir görüntü bulamadık; ayrıntılar bulanık görünebilir."));
     }
@@ -131,6 +137,23 @@ export function mount(ctx, params) {
         el("p", {}, "Kaynak: NASA GIBS / ESDIS (Harmonized Landsat Sentinel-2, VIIRS)."),
         el("p", {}, "Resmi bir kayıt değildir.")));
     if (mode === "satellite") mountCompare();
+  }
+
+  // Other usable days for one side. Choosing one swaps the image on the map.
+  function dateChips(key, list, current) {
+    const group = el("div", { class: "chips", role: "group", "aria-label": key === "before" ? "Öncesi için başka gün" : "Sonrası için başka gün", style: { marginTop: "12px" } },
+      el("span", { class: "card-sub", style: { alignSelf: "center" } }, key === "before" ? "Öncesi:" : "Sonrası:"));
+    for (const option of list) {
+      const chip = el("button", { class: "chip", type: "button", "aria-pressed": String(option.date === current?.date), onclick: () => {
+        compare?.swap(key, option);
+        [...group.querySelectorAll(".chip")].forEach((c) => c.setAttribute("aria-pressed", String(c === chip)));
+        const card = imageryBox.querySelectorAll(".compare-card")[key === "before" ? 0 : 1];
+        card?.replaceWith(side(option, key === "before" ? "Öncesi" : "Sonrası"));
+        announce(`${key === "before" ? "Öncesi" : "Sonrası"} görüntüsü: ${fmt.day(option.date)}`);
+      } }, fmt.shortDay(option.date));
+      group.append(chip);
+    }
+    return group;
   }
 
   function side(image, label) {

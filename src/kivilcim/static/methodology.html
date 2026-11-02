@@ -84,9 +84,11 @@ bu bölümün görevidir.</p>
 <h2>Öncesi ve sonrası uydu görüntüleri</h2>
 <p>Her geçmiş yangın için, yangının başlangıcından önceki ve bitişinden sonraki en uygun gün NASA GIBS'in açık uydu katmanlarından seçilir ve aynı haritada bir çizgiyle karşılaştırılır.</p>
 <ul>
-  <li><strong>Kaynak:</strong> Önce 30 m çözünürlüklü HLS (Sentinel-2 ve Landsat). Uygun gün bulunamazsa 250 m çözünürlüklü günlük VIIRS görüntüsü kullanılır ve bu açıkça belirtilir.</li>
-  <li><strong>Gün seçimi:</strong> Yangından en fazla 21 gün önce ve 28 gün sonrasına kadar haftalık adımlarla aranır. Her aday gün için olayın üzerindeki görüntü karosu indirilip boş (görüntü yok) ve bulutlu pikseller sayılır; en yakın kullanılabilir gün seçilir, daha uzak ama açık bir gün en fazla 8 gün farkla tercih edilir.</li>
-  <li><strong>Sınır:</strong> Görüntüler bulutlu, kısmi ya da yangından günler uzakta olabilir. Her tarafın tarihi, kaynağı, çözünürlüğü ve bulut durumu yazılır. Yanık alan sınırı çizilmez; görüntüye bakıp kendiniz değerlendirirsiniz.</li>
+  <li><strong>Kaynak:</strong> Önce 30 m çözünürlüklü HLS (Sentinel-2 ve Landsat). Uygun gün bulunamazsa, farklı saatlerde geçen dört uydunun (VIIRS Suomi NPP, VIIRS NOAA-20, MODIS Terra, MODIS Aqua) 250 m çözünürlüklü günlük görüntülerinden en açık olanı kullanılır ve bu açıkça belirtilir.</li>
+  <li><strong>Öncesi:</strong> İlk tespitten en fazla 21 gün öncesine kadar haftalık adımlarla aranır.</li>
+  <li><strong>Sonrası:</strong> Yangınlar çoğu zaman olay olarak gruplandıktan sonra da sürer ve yeni söndüğünde hâlâ dumanlıdır. Bu yüzden sonrası görüntüsü, olay merkezinin çevresinde (yaklaşık 15 km) en az 5 MW gücünde son tespit görülen günden (olaydan en fazla iki hafta sonrasına kadar bakılır) en az 3 gün sonra, en fazla 28 gün içinde aranır. Bu süre henüz geçmediyse ya da görüntü yayımlanmadıysa (uydu görüntüleri 1-2 gün geç yayımlanır) "henüz yok" denir ve birkaç saatte bir yeniden bakılır.</li>
+  <li><strong>Gün seçimi:</strong> Her aday gün için olayın üzerindeki görüntü karosu indirilip boş ve bulutlu pikseller sayılır; en yakın kullanılabilir gün seçilir, daha uzak ama açık bir gün en fazla 8 gün farkla tercih edilir. Aynı taraf için başka kullanılabilir günler de (en fazla 5) tarih düğmeleriyle sunulur; birini seçince harita o güne geçer.</li>
+  <li><strong>Sınır:</strong> Görüntüler bulutlu, kısmi ya da yangından günler uzakta olabilir. Her tarafın tarihi, kaynağı, çözünürlüğü ve bulut durumu yazılır. Yanık alan sınırı çizilmez; görüntüye bakıp kendiniz değerlendirirsiniz. Servis yanıt vermezse istek yeniden denenir; yine de eksik kalırsa sonuç kısa süre sonra yeniden aranır.</li>
 </ul>
 
 <h2>Geçmiş yangınlar sayfası</h2>

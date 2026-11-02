@@ -3,6 +3,21 @@
 All notable changes. The format follows [Keep a Changelog](https://keepachangelog.com/) and the
 project uses [semantic versioning](https://semver.org/).
 
+## [0.2.1] - 2026-11-03
+
+### Changed
+- **The "after" image is taken once the fire is out.** It was taken the day after the last detection of the
+  event, while fires often still burned. It now waits three days after the last strong detection (5 MW or
+  more) near the center of the fire, looked at up to two weeks past the event. If that is too recent, the
+  page says the image is not there yet and looks again every few hours.
+- **More and more reliable images.** Each side offers up to five usable days as date buttons that swap the
+  image on the map. When no 30 m image is clear, the best of four daily 250 m images (VIIRS Suomi NPP,
+  VIIRS NOAA-20, MODIS Terra, MODIS Aqua) is used. Failed requests are tried again, and a result built from
+  failed requests is searched again after 15 minutes instead of being kept.
+- **Faster past fires.** The images of the biggest fires are searched in the background after every update,
+  so the list opens with its thumbnails ready; both sides of a search run at the same time, and the
+  imagery rate limit is 60 a minute because most answers are now stored.
+
 ## [0.2.0] - 2026-11-03
 
 The whole front end was redone, and every past fire now shows satellite images from before and after.
