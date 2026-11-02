@@ -13,12 +13,13 @@ from typing import Literal
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from kivilcim import __version__
 from kivilcim.config import Settings, get_settings
 from kivilcim.db import init_db, make_engine, make_session_factory
 from kivilcim.events import Event, find_events
@@ -410,9 +411,28 @@ def create_app(
     def index() -> FileResponse:
         return FileResponse(STATIC_DIR / "index.html")
 
+    @app.get("/manifest.webmanifest", include_in_schema=False)
+    def manifest() -> FileResponse:
+        return FileResponse(STATIC_DIR / "manifest.webmanifest", media_type="application/manifest+json")
+
+    @app.get("/sw.js", include_in_schema=False)
+    def service_worker() -> Response:
+        # Served from the root so it can control the whole site. The version changes the cache
+        # name, so a new release replaces the stored copies.
+        script = (STATIC_DIR / "sw.js").read_text(encoding="utf-8").replace("__VERSION__", __version__)
+        return Response(
+            script,
+            media_type="application/javascript",
+            headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"},
+        )
+
     @app.get("/history", include_in_schema=False)
     def history() -> FileResponse:
         return FileResponse(STATIC_DIR / "history.html")
+
+    @app.get("/methodology", include_in_schema=False)
+    def methodology() -> FileResponse:
+        return FileResponse(STATIC_DIR / "methodology.html")
 
     @app.get("/health")
     def health() -> dict[str, str]:

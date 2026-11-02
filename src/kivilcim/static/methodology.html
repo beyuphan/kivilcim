@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#b91c1c">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32.png">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<script src="/static/pwa.js" defer></script>
+<title>Kıvılcım: Yöntem ve sınırlar</title>
+<style>
+  :root { --bg: #f6f5f2; --panel: #ffffff; --text: #1f2328; --muted: #5b6470; --line: #dcdad4; --link: #1d4ed8; --stale: #b91c1c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14161a; --panel: #1d2026; --text: #e8e6e1; --muted: #9aa3ad; --line: #343942; --link: #93b4ff; }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  a { color: var(--link); }
+  header { padding: 12px 16px 4px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; max-width: 860px; margin: 0 auto; }
+  h1 { margin: 0; font-size: 22px; }
+  main { max-width: 860px; margin: 0 auto; padding: 0 16px 32px; }
+  h2 { font-size: 19px; margin: 28px 0 6px; }
+  h3 { font-size: 16px; margin: 18px 0 4px; }
+  p, li { margin: 6px 0; }
+  .disclaimer { margin: 12px 0; padding: 10px 14px; border: 1px solid var(--line); border-left: 4px solid var(--stale); background: var(--panel); font-size: 15px; }
+  table { border-collapse: collapse; width: 100%; background: var(--panel); font-size: 14px; margin: 8px 0; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .scroll { overflow-x: auto; }
+  .note { color: var(--muted); font-size: 14px; }
+  code { font-size: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  footer { max-width: 860px; margin: 0 auto; padding: 0 16px 32px; font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Yöntem ve sınırlar</h1>
+  <a href="/">← Güncel harita</a>
+</header>
+<main>
+<div class="disclaimer">
+  <strong>Kıvılcım resmi bir uyarı sistemi değildir.</strong> Uydu tespitleri gecikmeli olabilir, yanlış pozitif içerebilir ve her yangını
+  göstermez. Acil durumda <strong>112</strong>'yi arayın ve <strong>AFAD</strong> ile iletişime geçin.
+</div>
+
+<h2>Bu site ne yapar, ne yapmaz</h2>
+<p>Kıvılcım, NASA'nın uydu verisinden Türkiye'deki ısı tespitlerini gösterir ve aktif bir tespitin çevresinde havanın yangının sürmesi için
+ne kadar elverişli olduğunu söyler. Bir yangının nereye yayılacağını tahmin etmez, "yangın olasılığı" vermez, bir bölgenin güvenli
+olduğunu söylemez. Tespit görünmemesi, yangın olmadığı anlamına gelmez.</p>
+
+<h2>Uydu tespitleri</h2>
+<ul>
+  <li><strong>Kaynak:</strong> NASA FIRMS. Üç VIIRS uydusu (Suomi NPP, NOAA-20, NOAA-21; piksel yaklaşık 375 m) ve MODIS (Terra, Aqua; piksel
+    yaklaşık 1 km). Uydular aynı yerden günde birkaç kez geçer, geçişler arasında saatler vardır.</li>
+  <li><strong>Gecikme:</strong> Gerçek zamana yakın veri, uydu geçişinden yaklaşık 3 saat sonra yayımlanır. Bu yüzden ekranda iki ayrı zaman vardır:
+    servisin veriyi en son ne zaman çektiği ve uydunun en son ne zaman gözlem yaptığı. Servis güncelliği için eşikler: 3 saatin altı güncel, 3-6 saat gecikmiş,
+    6 saatten fazlası eski. Uydu gözleminin eski olması normaldir ve servis arızası sayılmaz.</li>
+  <li><strong>Neleri görmez:</strong> Küçük yangınları (örneğin tek bir ev yangını genellikle görünmez; piksel yüzlerce metrekarelik alevli alan ister), kısa süren
+    yangınları (geçişler arasında çıkıp sönenleri), bulut ve yoğun duman altındakileri.</li>
+  <li><strong>Her tespit yangın değildir:</strong> Fabrika, rafineri, çelik tesisi, gaz meşalesi, çöplük ve tarla/anız yakmaları da tespit olarak görünür.</li>
+  <li><strong>Güven değeri:</strong> VIIRS kategori (düşük, orta, yüksek), MODIS 0-100 arası sayı verir; ikisi de düşük, orta, yüksek olarak birleştirilir
+    (MODIS: 0-29 düşük, 30-79 orta, 80-100 yüksek). Düşük güvenli tespitler ayrı gösterilir, silinmez.</li>
+  <li><strong>Sabit kaynaklar:</strong> Veri bulunan tüm günlerin en az %25'inde tespit veren bir ~11 km'lik hücre (en az 60 günlük geçmiş varsa) olası sabit ısı kaynağı
+    sayılır ve kesikli gri çemberle ayrı gösterilir. Bu kural gerçek veride Ereğli, İskenderun, Karabük ve Aliağa çevresi gibi sanayi bölgelerini ve Irak'taki
+    petrol sahalarını işaretledi. Orman yangını da bir fabrikanın yanında çıkabilir; bu yüzden tespitler silinmez, yalnızca işaretlenir ve bu yerler için
+    elverişlilik değeri gösterilmez.</li>
+  <li><strong>Büyük/küçük ayrımı:</strong> Haritada toplam ısı gücü 30 MW altı ve 5'ten az tespitli bölgeler varsayılan olarak gizlenir (çoğu tarla yakması gibi küçük olaylardır);
+    kutu işaretlenerek görülebilir.</li>
+</ul>
+
+<h2>Havanın elverişliliği (deneysel indeks)</h2>
+<p>Her aktif bölgenin merkezi için Open-Meteo'dan güncel hava alınır (sıcaklık, bağıl nem, rüzgar, son 72 saatteki yağış) ve basit bir kural tabanlı
+skor (0-100) hesaplanır. Makine öğrenmesi yoktur; formül şeffaftır ve her sonuç girdileriyle birlikte gösterilir. Sürüm: <code>v2</code>.</p>
+<div class="scroll"><table>
+  <thead><tr><th>Etken</th><th>Nasıl ölçeklenir (0 ile 1 arası)</th><th>Rolü</th></tr></thead>
+  <tbody>
+    <tr><td>Nem</td><td>%70'te 0, %15'te 1</td><td>Kuruluk ortalamasında ağırlık 0,35</td></tr>
+    <tr><td>Rüzgar</td><td>0 km/sa'te 0, 50 km/sa'te 1</td><td>Kuruluk ortalamasında ağırlık 0,25</td></tr>
+    <tr><td>Kurak dönem</td><td>Son 72 saatte 10 mm yağışta 0, hiç yağışsızda 1</td><td>Kuruluk ortalamasında ağırlık 0,20</td></tr>
+    <tr><td>Sıcaklık</td><td>5 °C ve altında 0, 30 °C ve üstünde 1</td><td>Çarpan: skor = kuruluk × sıcaklık × 100</td></tr>
+  </tbody>
+</table></div>
+<p>Seviyeler: 20'nin altı düşük, 40'ın altı orta, 60'ın altı yüksek, 80'in altı çok yüksek, üstü aşırı.</p>
+<p><strong>Neden çarpan?</strong> İlk sürümde sıcaklık toplama ekleniyordu ve 2-24 °C'lik bir Kasım gününde 81 il merkezinin 14'ü "yüksek" çıktı. Soğuk hava,
+hava kuru ve rüzgarlı olsa bile yangın tehlikesini yükseltmez; sıcaklık çarpan yapılınca aynı gün 67 düşük, 14 orta çıktı.</p>
+<p><strong>Neleri hesaba katmaz:</strong> bitki örtüsü ve yakıt tipi, arazi eğimi, kuraklık geçmişi, tutuşturucu kaynaklar, yerel rüzgar ve gelecek
+saatlerin tahmini. Hava modelinin çözünürlüğü kabadır; yerel koşullar farklı olabilir.</p>
+<p><strong>Neden yalnızca tespit olan yerde?</strong> Aylardır yangın olmayan bir yer için "yangın riski" göstermek yanıltıcı olur. Değer yalnızca aktif bir
+tespitin çevresinde ve "elverişlilik" olarak gösterilir.</p>
+
+<h2 id="validation-title">Doğrulama</h2>
+<p class="note">İndeks bir akıl yürütmeyle seçildi, kalibre edilmedi. Aşağıda, geçmiş verilerle yapılan ölçümlerin sonucu yer alır. Sonuç zayıfsa bunu açıkça söylemek
+bu bölümün görevidir.</p>
+<div id="validation"><p class="note">Yükleniyor…</p></div>
+
+<h2>Geçmiş yangınlar sayfası</h2>
+<p><a href="/history">Geçmiş yangınlar</a> sayfasındaki olaylar, uydu tespitlerinin güç, yer ve zamana göre otomatik gruplanmasıdır; doğrulanmış olaylar değildir.</p>
+<ul>
+  <li>Bir olay en az 100 MW'lık güçlü bir tespitten başlar (orman yangınları buna ulaşır, tarla yakmaları nadiren); çevresindeki zayıf tespitler (yaklaşık 0,2°
+    ve 2 gün öncesinden 3 gün sonrasına kadar) olaya eklenir.</li>
+  <li>Bir olay en az 45 tespit (üç uydu için), toplam 1500 MW ister ve en fazla 14 gün sürer. Bu eşikler Haziran-Kasım 2026 verisinden seçildi ve geçicidir.</li>
+  <li>Olayın kapladığı alanın çapı gösterilir. Çok geniş alana yayılmış olaylar çoğunlukla tarla ve anız yakmasıdır. Orman yangını olup olmadığına otomatik karar
+    verilmez, çünkü şekil ve güç ölçüleri ikisini güvenilir biçimde ayırmadı.</li>
+  <li>Yer adları en yakın ilçe merkezine göredir ve yaklaşıktır. Noktalar uydunun gözlem anıdır; yanan alanın sınırı değildir.</li>
+</ul>
+
+<h2>Veri kaynakları ve lisanslar</h2>
+<ul>
+  <li><strong>Yangın verisi:</strong> <a href="https://firms.modaps.eosdis.nasa.gov/">NASA FIRMS</a> (açık veri).</li>
+  <li><strong>Hava verisi:</strong> <a href="https://open-meteo.com/">Open-Meteo.com</a>, CC BY 4.0. Ücretsiz sürüm yalnızca ticari olmayan kullanım içindir; bu site reklamsızdır ve ücretsizdir.</li>
+  <li><strong>Harita ve il/ilçe merkez noktaları:</strong> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> katkıcıları, ODbL 1.0. Resmi sınır verisi değildir.</li>
+  <li><strong>Harita kitaplığı:</strong> Leaflet (BSD-2).</li>
+  <li><strong>Kaynak kod:</strong> MIT lisansı, <a href="https://github.com/beyuphan/kivilcim">github.com/beyuphan/kivilcim</a>.</li>
+</ul>
+
+<h2>Gizlilik</h2>
+<p>Hesap, çerez ve izleme yoktur. Bir konum seçtiğinizde ya da "Konumumu kullan"ı tıkladığınızda koordinatlar yalnızca o sorguyu yanıtlamak için sunucuya gönderilir ve
+hava servisine ~11 km'ye yuvarlanmış olarak iletilir; veritabanında kullanıcıya ait bir kayıt tutulmaz. Sunucu günlükleri istek adreslerini (koordinatlar dahil)
+tutabilir; kendi sunucunuzu çalıştırırsanız bunlar sizde kalır.</p>
+
+<h2>Bilinen sınırlar</h2>
+<ul>
+  <li>İndeks ve olay eşikleri bildirilen gerçek yangınlarla sınanmadı; aşağıdaki doğrulama bölümü yalnızca uydu verisiyle yapılabilen ölçümleri içerir.</li>
+  <li>Yazın kurak mevsimde indeks sık sık yüksek çıkar; seviyelerin ayırt ediciliği sınırlıdır.</li>
+  <li>Geçmiş veri yalnızca VIIRS ve yalnızca 2026 Haziran'dan itibarendir; arşiv geriye doğru genişletilebilir.</li>
+  <li>Uygulama yangınlara müdahale bilgisi (ekipler, helikopterler) vermez ve vermesi planlanmamıştır.</li>
+</ul>
+</main>
+<footer>Bu sayfa yazılımın nasıl çalıştığını anlatır; kodla birlikte güncellenir.</footer>
+
+<script>
+(function () {
+  var box = document.getElementById("validation");
+  function el(tag, text, className) { var n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (className) n.className = className; return n; }
+  function pct(x) { return (x * 100).toFixed(0) + "%"; }
+
+  fetch("/static/validation.json").then(function (r) {
+    if (!r.ok) throw new Error("none");
+    return r.json();
+  }).then(function (v) {
+    box.replaceChildren();
+    box.appendChild(el("p", v.summary));
+    if (v.tests && v.tests.length) {
+      var wrap = el("div", undefined, "scroll");
+      var table = document.createElement("table");
+      var head = document.createElement("tr");
+      ["Ölçüm", "Sonuç", "Örnek sayısı", "Yorum"].forEach(function (h) { head.appendChild(el("th", h)); });
+      var thead = document.createElement("thead"); thead.appendChild(head); table.appendChild(thead);
+      var tbody = document.createElement("tbody");
+      v.tests.forEach(function (t) {
+        var tr = document.createElement("tr");
+        tr.appendChild(el("td", t.name)); tr.appendChild(el("td", t.result));
+        tr.appendChild(el("td", String(t.n))); tr.appendChild(el("td", t.comment));
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody); wrap.appendChild(table); box.appendChild(wrap);
+    }
+    (v.caveats || []).forEach(function (c) { box.appendChild(el("p", c, "note")); });
+    if (v.generated) box.appendChild(el("p", "Üretildi: " + v.generated + " (indeks " + v.index_version + ")", "note"));
+  }).catch(function () {
+    box.replaceChildren(el("p", "Doğrulama sonuçları henüz yayımlanmadı.", "note"));
+  });
+})();
+</script>
+</body>
+</html>
