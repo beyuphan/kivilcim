@@ -79,6 +79,14 @@ def test_index_page_is_served_with_the_disclaimer(client):
     assert "AFAD" in response.text
 
 
+def test_district_data_is_served_as_static_json(client):
+    response = client.get("/static/ilceler.json")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["provinces"]) == 81
+    assert "OpenStreetMap" in data["attribution"]
+
+
 # ---- /fires -----------------------------------------------------------------
 
 

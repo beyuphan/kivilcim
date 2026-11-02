@@ -177,7 +177,7 @@ Every response includes a `data_as_of` field and a short `disclaimer` field (not
 - Risk zones layer with legend, level and the drivers behind it; "experimental" label; note that no zone does not mean safe
 - Open-Meteo attribution
 - Responsibility note and data time on every screen
-- Status: first slice done (map at `/`, click or device location, radius and time filters, detections and low-confidence ones drawn differently, data freshness banner, permanent disclaimer, Istanbul time). Still to do: province/district selection with verified coordinate data, risk layer, PWA install
+- Status: first slice done (map at `/`, click or device location, radius and time filters, detections and low-confidence ones drawn differently, data freshness banner, permanent disclaimer, Istanbul time). Province and district selection is also done, using approximate center points of 81 provinces and 973 districts from OpenStreetMap data (ODbL, see `data/README.md`). Still to do: risk layer, PWA install
 
 **Stage 4: Validation and analysis**
 - Backtesting on past fires (FIRMS archive + Sentinel-2)
@@ -216,6 +216,7 @@ Every response includes a `data_as_of` field and a short `disclaimer` field (not
 - Location input: the backend API takes only latitude/longitude. The province/district to coordinate mapping is handled in the frontend (Stage 3) with static data.
 - Risk index: part of the MVP. Rule-based, weather-only. Computed only around active fire clusters (map layer) and on demand for looked-up locations (cached). No nationwide grid and no machine learning in the MVP. Labeled experimental until the Stage 4 backtest.
 - Open-Meteo: used under the free non-commercial terms with attribution; the project stays free and ad-free for now.
+- Place data: province/district center points come from OpenStreetMap (ODbL 1.0), kept in `data/` and `static/ilceler.json` with attribution. The code stays MIT; the ODbL data files are separate. They are approximate centers, not official boundaries.
 - License: MIT (see `LICENSE`).
 - Documentation: this file is bilingual; any change must be made in both the English and Turkish sections together.
 
@@ -397,7 +398,7 @@ Her yanıtta `data_as_of` alanı ve kısa bir `disclaimer` alanı bulunur (resmi
 - Lejandlı risk bölgeleri katmanı, seviye ve arkasındaki etkenler; "deneysel" etiketi; bölge yok demek güvenli demek değildir notu
 - Open-Meteo atfı
 - Sorumluluk notu ve veri zamanı her ekranda
-- Durum: ilk dilim tamam (`/` adresinde harita, tıklayarak ya da cihaz konumuyla seçim, yarıçap ve zaman filtreleri, normal ve düşük güvenli tespitlerin farklı çizimi, veri tazelik bandı, sabit sorumluluk notu, İstanbul saati). Kalanlar: doğrulanmış koordinat verisiyle il/ilçe seçimi, risk katmanı, PWA kurulumu
+- Durum: ilk dilim tamam (`/` adresinde harita, tıklayarak ya da cihaz konumuyla seçim, yarıçap ve zaman filtreleri, normal ve düşük güvenli tespitlerin farklı çizimi, veri tazelik bandı, sabit sorumluluk notu, İstanbul saati). İl ve ilçe seçimi de tamam; OpenStreetMap verisinden 81 il ve 973 ilçenin yaklaşık merkez noktaları kullanılıyor (ODbL, bkz. `data/README.md`). Kalanlar: risk katmanı, PWA kurulumu
 
 **Aşama 4: Doğrulama ve analiz**
 - Geçmiş yangınlarla geri test (FIRMS arşivi + Sentinel-2)
@@ -436,6 +437,7 @@ Her yanıtta `data_as_of` alanı ve kısa bir `disclaimer` alanı bulunur (resmi
 - Konum girişi: Backend API yalnızca enlem/boylam alır. İl/ilçe → koordinat eşlemesi arayüzde (Aşama 3) statik veriyle çözülür.
 - Risk indeksi: MVP'nin parçası. Kural tabanlı, yalnızca hava verisine dayanır. Sadece aktif yangın kümelerinin çevresinde (harita katmanı) ve sorgulanan konumlar için istek anında (önbellekli) hesaplanır. MVP'de ülke geneli grid ve makine öğrenmesi yok. Aşama 4 geri testine kadar deneysel olarak etiketlenir.
 - Open-Meteo: ücretsiz ticari olmayan koşullarla ve atıfla kullanılır; proje şimdilik ücretsiz ve reklamsız kalır.
+- Yer verisi: il/ilçe merkez noktaları OpenStreetMap'ten (ODbL 1.0) gelir, atıfla birlikte `data/` ve `static/ilceler.json` içinde tutulur. Kod MIT kalır; ODbL veri dosyaları ayrıdır. Bunlar yaklaşık merkezlerdir, resmi sınır değildir.
 - Lisans: MIT (bkz. `LICENSE`).
 - Dokümantasyon: Bu dosya iki dillidir; her değişiklik İngilizce ve Türkçe bölümlerde birlikte yapılır.
 

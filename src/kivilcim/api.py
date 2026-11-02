@@ -10,6 +10,7 @@ from typing import Literal
 
 from fastapi import Depends, FastAPI, Query
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -233,4 +234,5 @@ def create_app(
             disclaimer=DISCLAIMER,
         )
 
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     return app

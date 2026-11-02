@@ -22,6 +22,7 @@ See [PLAN.md](PLAN.md) for the full scope, architecture, and roadmap.
 ## Data sources
 
 - [NASA FIRMS](https://firms.modaps.eosdis.nasa.gov/): active fire detections (free, API key required)
+- [OpenStreetMap](https://www.openstreetmap.org/copyright): map tiles and province/district center points in `data/` (ODbL 1.0, attribution required, not official boundaries)
 - [Open-Meteo](https://open-meteo.com/): weather data (free for non-commercial use, no key required; licensed CC BY 4.0, attribution required)
 
 ## Tech stack (planned)

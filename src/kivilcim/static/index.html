@@ -65,6 +65,12 @@
 
 <div class="controls">
   <button id="locate" type="button">Konumumu kullan</button>
+  <label>İl
+    <select id="province"><option value="">Seçin…</option></select>
+  </label>
+  <label>İlçe
+    <select id="district" disabled><option value="">Tüm il</option></select>
+  </label>
   <label>Yarıçap
     <select id="radius">
       <option value="10">10 km</option><option value="25">25 km</option><option value="50">50 km</option>
@@ -79,7 +85,7 @@
   </label>
 </div>
 
-<div class="hint">Haritaya tıklayarak konum seçin. Gösterilen alan, seçili noktanın çevresindeki dairedir.</div>
+<div class="hint">İl/ilçe seçin, haritaya tıklayın ya da konumunuzu kullanın. İl ve ilçe konumları yaklaşık merkez noktalarıdır. Gösterilen alan, seçili noktanın çevresindeki dairedir.</div>
 <div id="map"></div>
 <div id="summary"></div>
 <div id="notice"></div>
@@ -92,7 +98,7 @@
 
 <footer>
   Yangın verisi: <a href="https://firms.modaps.eosdis.nasa.gov/">NASA FIRMS</a>.
-  Harita: © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> katkıda bulunanlar.
+  Harita ve il/ilçe merkez noktaları: © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> katkıcıları, ODbL 1.0. Resmi sınır verisi değildir.
   Her nokta uydunun o anki gözlemidir; "şu an yanıyor" anlamına gelmez.
 </footer>
 
@@ -229,6 +235,46 @@ async function load() {
   }
 }
 
+let places = [];
+const byTurkish = (a, b) => a.name.localeCompare(b.name, "tr");
+
+function fillOptions(select, items, firstLabel) {
+  select.replaceChildren(new Option(firstLabel, ""));
+  for (const item of items) select.appendChild(new Option(item.name, item.code ?? item.name));
+}
+function goTo(place, radiusKm, zoom) {
+  point = { lat: place.lat, lon: place.lon };
+  $("radius").value = String(radiusKm);
+  map.setView([place.lat, place.lon], zoom);
+  load();
+}
+async function loadPlaces() {
+  try {
+    const response = await fetch("/static/ilceler.json");
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    places = (await response.json()).provinces;
+    fillOptions($("province"), places.slice().sort(byTurkish), "Seçin…");
+  } catch (error) {
+    $("province").disabled = true;
+  }
+}
+function selectedProvince() { return places.find((p) => p.code === $("province").value); }
+
+$("province").addEventListener("change", () => {
+  const province = selectedProvince();
+  const district = $("district");
+  if (!province) { fillOptions(district, [], "Tüm il"); district.disabled = true; return; }
+  fillOptions(district, province.districts.slice().sort(byTurkish), "Tüm il");
+  district.disabled = false;
+  goTo(province, 100, 8);
+});
+$("district").addEventListener("change", () => {
+  const province = selectedProvince();
+  if (!province) return;
+  const district = province.districts.find((d) => d.name === $("district").value);
+  if (district) goTo(district, 25, 10); else goTo(province, 100, 8);
+});
+
 map.on("click", (e) => { point = { lat: e.latlng.lat, lon: e.latlng.lng }; load(); });
 $("radius").addEventListener("change", load);
 $("since").addEventListener("change", load);
@@ -245,6 +291,7 @@ $("locate").addEventListener("click", () => {
   );
 });
 
+loadPlaces();
 load();
 </script>
 </body>
