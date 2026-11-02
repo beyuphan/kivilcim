@@ -142,7 +142,7 @@ def test_network_error_marks_run_failed_without_leaking_key(session_factory, cli
 def test_one_failing_source_does_not_stop_the_others(session_factory, client):
     respx.get(VIIRS_URL).respond(500, text="boom")
     respx.get(MODIS_URL).respond(200, text=load("modis.csv"))
-    settings = Settings(_env_file=None, firms_map_key=KEY)
+    settings = Settings(_env_file=None, firms_map_key=KEY, firms_sources="VIIRS_SNPP_NRT,MODIS_NRT")
 
     runs = run_ingest(session_factory, client, settings, now=NOW)
 

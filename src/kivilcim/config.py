@@ -8,8 +8,9 @@ class Settings(BaseSettings):
 
     firms_map_key: str = ""
     database_url: str = "sqlite:///kivilcim.db"
-    # Comma-separated FIRMS products to ingest.
-    firms_sources: str = "VIIRS_SNPP_NRT,MODIS_NRT"
+    # Comma-separated FIRMS products to ingest. Three VIIRS satellites pass at different times, so
+    # together they see a fire several times a day. MODIS adds coarser (1 km) observations.
+    firms_sources: str = "VIIRS_SNPP_NRT,VIIRS_NOAA20_NRT,VIIRS_NOAA21_NRT,MODIS_NRT"
     # How many days back each run asks for. A window larger than the run interval
     # lets a missed run be recovered; deduplication makes the overlap harmless.
     firms_day_range: int = 2

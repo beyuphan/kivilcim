@@ -9,6 +9,15 @@ def test_defaults(monkeypatch):
     assert settings.database_url == "sqlite:///kivilcim.db"
 
 
+def test_default_sources_cover_three_viirs_satellites_and_modis():
+    assert Settings(_env_file=None).source_list == [
+        "VIIRS_SNPP_NRT",
+        "VIIRS_NOAA20_NRT",
+        "VIIRS_NOAA21_NRT",
+        "MODIS_NRT",
+    ]
+
+
 def test_reads_environment(monkeypatch):
     monkeypatch.setenv("FIRMS_MAP_KEY", "abc123")
     monkeypatch.setenv("DATABASE_URL", "sqlite:///other.db")

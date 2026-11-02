@@ -114,7 +114,8 @@
       <div class="bars" id="bars" aria-label="Günlük tespit sayısı"></div>
       <div class="axis"><span id="axisStart"></span><span>günlük tespit sayısı</span><span id="axisEnd"></span></div>
       <div class="small">Noktalar uydunun gözlem anıdır, yangın sınırı ya da yanan alan değildir. Uydular bölgeden günde birkaç kez
-        geçer; bulut ve duman bazı tespitleri engelleyebilir. Güneydoğu ovalarındaki yaz başı olaylarında tarla yangını ihtimali yüksektir.</div>
+        geçer; bulut ve duman bazı tespitleri engelleyebilir. Çok geniş bir alana (yüzlerce kilometrekare) dağılmış olaylar çoğunlukla
+        tarla ve anız yakmasıdır; güneydoğu ve Çukurova ovalarında bu ihtimal yüksektir. Orman yangını olup olmadığına otomatik karar verilmez.</div>
     </div>
   </div>
 </div>
@@ -190,7 +191,7 @@ async function loadEvents() {
     button.type = "button";
     button.appendChild(el("div", e.district + " / " + e.province, "place"));
     button.appendChild(el("div", rangeText(e), "meta"));
-    button.appendChild(el("div", "en güçlü tespit " + num.format(e.max_frp_mw) + " MW · " + e.detections + " tespit · " + e.days + " gün", "meta"));
+    button.appendChild(el("div", "en güçlü tespit " + num.format(e.max_frp_mw) + " MW · " + e.detections + " tespit · " + e.days + " gün · ≈" + num.format(e.extent_km) + " km", "meta"));
     button.addEventListener("click", () => select(e));
     buttons[e.id] = button;
     box.appendChild(button);
@@ -262,6 +263,7 @@ function build(data) {
   $("subtitle").textContent = "Yer adı en yakın ilçe merkezine göredir ve yaklaşıktır.";
   const stats = [
     ["Süre", ev.days + " gün"],
+    ["Alan çapı", "≈ " + num.format(ev.extent_km) + " km"],
     ["En yoğun gün", shortFmt.format(parse(ev.peak_day))],
     ["Tespit sayısı", num.format(ev.detections)],
     ["En güçlü tespit", num.format(ev.max_frp_mw) + " MW"],

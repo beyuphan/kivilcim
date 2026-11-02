@@ -228,9 +228,10 @@ def add_event_fire(session_factory, lat=39.9, lon=32.85, first_day=0, days=3, st
     with session_factory() as s:
         for n in range(first_day, first_day + days):
             when = datetime(2026, 7, 1, 10, 0, tzinfo=UTC) + timedelta(days=n)
-            # Weak neighbors are offset so none shares the strong detection's coordinates.
+            # Weak neighbors are offset so none shares the strong detection's coordinates. There are
+            # enough of them to pass the (three satellite) default thresholds.
             points = [(lat, lon, strong)] + [
-                (lat + 0.03 * (i % 4 + 1), lon + 0.03 * (i // 4), 10.0) for i in range(8)
+                (lat + 0.03 * (i % 4 + 1), lon + 0.03 * (i // 4), 20.0) for i in range(24)
             ]
             for plat, plon, frp in points:
                 s.add(
@@ -253,7 +254,7 @@ def test_events_lists_a_big_fire_with_its_place(client, session_factory):
     assert event["end"] == "2026-07-03"
     assert event["province"] == "Ankara"
     assert event["max_frp_mw"] == 150
-    assert event["detections"] == 27
+    assert event["detections"] == 75
     assert event["in_turkey"] is True
     assert len(event["bbox"]) == 4
     assert "not confirmed incidents" in body["note"]
@@ -280,6 +281,34 @@ def test_events_can_be_filtered_by_date_and_limited(client, session_factory):
     assert client.get("/events", params={"limit": 0}).status_code == 422
 
 
+def test_events_ignore_modis_detections(client, session_factory):
+    # MODIS pixels are 1 km, so their heat power is on a different scale and must not seed events.
+    add_event_fire(session_factory)
+    with session_factory() as s:
+        s.query(FireDetection).update({"instrument": "MODIS", "source": "MODIS_NRT"})
+        s.commit()
+    assert client.get("/events").json()["count"] == 0
+
+
+def test_events_are_cached_until_a_new_detection_arrives(session_factory, monkeypatch):
+    import kivilcim.api as api_module
+
+    calls = []
+    real = api_module.find_events
+    monkeypatch.setattr(api_module, "find_events", lambda rows: calls.append(len(rows)) or real(rows))
+    client = TestClient(create_app(session_factory, now=lambda: NOW))
+    add_event_fire(session_factory)
+
+    client.get("/events")
+    client.get("/events")
+    client.get("/events", params={"limit": 5})
+    assert len(calls) == 1
+
+    add_event_fire(session_factory, lat=37.0, lon=35.3, first_day=30)
+    assert client.get("/events").json()["count"] == 2
+    assert len(calls) == 2
+
+
 def test_events_hides_places_outside_turkey_unless_asked(client, session_factory):
     add_event_fire(session_factory, lat=36.3, lon=43.6)  # northern Iraq
     assert client.get("/events").json()["count"] == 0
@@ -303,7 +332,7 @@ def test_event_detail_has_days_before_and_after(client, session_factory):
     assert dates == ["2026-07-02", "2026-07-06", "2026-07-07", "2026-07-08", "2026-07-13"]
     assert all(35 < d["latitude"] < 41 and d["longitude"] < 34 for d in body["detections"])
     assert not any(d["latitude"] < 38 for d in body["detections"])  # the Adana detection is excluded
-    assert body["days"][1]["detections"] == 9
+    assert body["days"][1]["detections"] == 25
 
 
 def test_event_detail_window_can_be_narrowed(client, session_factory):

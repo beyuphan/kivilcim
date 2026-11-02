@@ -3,6 +3,7 @@
 Start with: uvicorn kivilcim.api:create_app --factory
 """
 
+import threading
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
@@ -156,6 +157,7 @@ class EventOut(BaseModel):
     center_lat: float
     center_lon: float
     bbox: list[float]  # min_lat, min_lon, max_lat, max_lon
+    extent_km: float  # diagonal of the bbox
     district: str  # nearest district center, approximate
     province: str
     in_turkey: bool
@@ -209,6 +211,7 @@ def event_out(event: Event) -> EventOut:
         center_lat=event.center_lat,
         center_lon=event.center_lon,
         bbox=[event.min_lat, event.min_lon, event.max_lat, event.max_lon],
+        extent_km=event.extent_km,
         district=event.district,
         province=event.province,
         in_turkey=event.in_turkey,
@@ -446,8 +449,25 @@ def create_app(
             disclaimer=DISCLAIMER,
         )
 
+    events_lock = threading.Lock()
+    events_cache: dict = {"key": None, "events": []}
+
     def all_events(session: Session) -> list[Event]:
-        return find_events(session.scalars(select(FireDetection)).all())
+        """Events from VIIRS detections only: MODIS pixels are 1 km, so their heat power is on a
+        different scale and would distort the strength thresholds. The result is cached until a
+        new detection is stored (rows only ever get added, so a count and max id are a safe key)."""
+        key = tuple(
+            session.execute(
+                select(func.count(FireDetection.id), func.max(FireDetection.id)).where(
+                    FireDetection.instrument == "VIIRS"
+                )
+            ).one()
+        )
+        with events_lock:
+            if events_cache["key"] != key:
+                rows = session.scalars(select(FireDetection).where(FireDetection.instrument == "VIIRS")).all()
+                events_cache.update(key=key, events=find_events(rows))
+            return events_cache["events"]
 
     @app.get("/events", response_model=EventsResponse)
     def events(

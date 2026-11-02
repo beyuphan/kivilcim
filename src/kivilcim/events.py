@@ -18,13 +18,17 @@ from dataclasses import dataclass
 from datetime import date
 
 from kivilcim.districts import INSIDE_TURKEY_KM, nearest_place
+from kivilcim.geo import haversine_km
 
 CELL_DEGREES = 0.1
 
-# Provisional thresholds, chosen from a scan of June to November 2026 (see PLAN.md).
-MIN_DETECTIONS = 15
-MIN_TOTAL_FRP = 500.0  # MW, summed over the event's detections
-MIN_MAX_FRP = 100.0  # MW, a detection this strong seeds an event
+# Provisional thresholds, chosen from a scan of June to November 2026 (see PLAN.md). The count and
+# the summed heat power grow with the number of satellites that see a fire, so they are set per
+# satellite and multiplied: three VIIRS satellites (SNPP, NOAA-20, NOAA-21) are ingested.
+SATELLITES = 3
+MIN_DETECTIONS = 15 * SATELLITES
+MIN_TOTAL_FRP = 500.0 * SATELLITES  # MW, summed over the event's detections
+MIN_MAX_FRP = 100.0  # MW, one detection this strong seeds an event (does not depend on the count)
 MAX_DAYS = 14
 # A cell that detects on at least this share of all days with data is a fixed source. The rule
 # needs enough history to mean anything, so it is skipped for short data sets.
@@ -56,6 +60,7 @@ class Event:
     max_lat: float
     min_lon: float
     max_lon: float
+    extent_km: float  # diagonal of the box around all detections; a very wide event is often crop burning
     district: str
     province: str
     in_turkey: bool
@@ -180,6 +185,15 @@ def find_events(
                 max_lat=max(m.latitude for m in members),
                 min_lon=min(m.longitude for m in members),
                 max_lon=max(m.longitude for m in members),
+                extent_km=round(
+                    haversine_km(
+                        min(m.latitude for m in members),
+                        min(m.longitude for m in members),
+                        max(m.latitude for m in members),
+                        max(m.longitude for m in members),
+                    ),
+                    1,
+                ),
                 district=district,
                 province=province,
                 in_turkey=distance <= INSIDE_TURKEY_KM,
