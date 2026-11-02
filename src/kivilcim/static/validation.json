@@ -1,0 +1,117 @@
+{
+  "summary": "Aktif yangın bölgelerinde indeks ile ertesi günkü yangın gücü değişimi arasında zayıf negatif ilişki bulundu. İndeks, aynı gün yangın olan ve olmayan yerleri ayırmada: zayıf ayrım gücü.",
+  "usage_note": "Bu ölçümde indeksin yangının ertesi gün sürmesiyle ilişkili olduğuna dair kanıt bulunamadı. Bu yüzden indeks bir yayılma ya da süreklilik tahmini olarak sunulmaz; yalnızca havanın yangın için ne kadar elverişli olduğunu anlatan deneysel bir gösterge olarak sunulur.",
+  "tests": [
+    {
+      "name": "A. Aktif yangın bölgesinde indeks ile ertesi günkü yangın gücü değişimi",
+      "result": "Spearman ρ = -0,11 (%95 aralık -0,21 ile -0,01)",
+      "n": 323,
+      "comment": "zayıf negatif ilişki. Değişim: ertesi günün toplam ısı gücünün bugününe oranının logaritması."
+    },
+    {
+      "name": "A2. Aynısı, bölgenin o günkü yangın gücünün etkisi çıkarıldıktan sonra",
+      "result": "kısmi ρ = -0,11 (%95 aralık -0,21 ile -0,00)",
+      "n": 323,
+      "comment": "zayıf negatif ilişki. Güçlü yangınlar ertesi gün sıradan olarak zayıflar; bu etkiyi ayırmadan bakmak yanıltabilir."
+    },
+    {
+      "name": "A3. Aynı ay içinde karşılaştırma (mevsim etkisini ayırmak için)",
+      "result": "ortalama ρ = +0,02",
+      "n": 323,
+      "comment": "En az 20 örneği olan aylarda ayrı hesaplanıp örnek sayısıyla ağırlıklandırıldı."
+    },
+    {
+      "name": "A4. İndeksin en düşük üçte bir",
+      "result": "indeks 12-45: ertesi gün sürme %71, medyan değişim -0,86",
+      "n": 107,
+      "comment": "Sürme: bölgede ertesi gün en az bir tespit var. Değişim: ısı gücü oranının logaritması (0: aynı, eksi: zayıfladı)."
+    },
+    {
+      "name": "A4. İndeksin orta üçte bir",
+      "result": "indeks 45-63: ertesi gün sürme %63, medyan değişim -2,39",
+      "n": 108,
+      "comment": "Sürme: bölgede ertesi gün en az bir tespit var. Değişim: ısı gücü oranının logaritması (0: aynı, eksi: zayıfladı)."
+    },
+    {
+      "name": "A4. İndeksin en yüksek üçte bir",
+      "result": "indeks 63-85: ertesi gün sürme %69, medyan değişim -1,75",
+      "n": 108,
+      "comment": "Sürme: bölgede ertesi gün en az bir tespit var. Değişim: ısı gücü oranının logaritması (0: aynı, eksi: zayıfladı)."
+    },
+    {
+      "name": "B. Yangın olan yerler ile aynı gün yangın olmayan yerlerin ayrımı",
+      "result": "AUC = 0,69 (%95 aralık 0,65 ile 0,73); ortalama indeks 53 (yangın) ve 38 (kontrol)",
+      "n": 646,
+      "comment": "zayıf ayrım gücü. 0,5 hiç ayırmama, 1 mükemmel ayırma demektir. Kontrol: aynı gün 25 km içinde hiç tespit olmayan rastgele ilçe merkezleri."
+    }
+  ],
+  "caveats": [
+    "Dönem: 2026-08-04 ile 2026-10-27. Yalnızca VIIRS tespitleri ve tek bir yılın tek bir mevsimi kullanıldı.",
+    "Gözlemsel ölçümdür: indeksin bir yangının nasıl yayılacağını önceden bildirdiğini değil, uydunun gördükleriyle ilişkisini gösterir.",
+    "Ertesi günkü ısı gücü gürültülüdür: uydu geçişleri, bulut ve duman sonucu değiştirir. Aynı yangın art arda günlerde bağımsız örnek sayılmasın diye aynı yerden 4 günde en fazla bir örnek alındı; yine de güven aralıkları iyimser kalabilir.",
+    "Geçmiş hava, Open-Meteo'nun yakın dönem tahmin modelinden alındı; canlı sitedeki değerlerle çözünürlük farkı olabilir. Her gün için 15:00 (İstanbul) koşulları kullanıldı.",
+    "İndeksin ağırlıkları bu veriye göre ayarlanmadı; ölçüm, sade ve akıl yürütmeyle seçilmiş formülün olduğu gibi sınanmasıdır.",
+    "Bu ölçüm bildirilen gerçek yangın kayıtlarıyla değil, uydu verisiyle yapıldı."
+  ],
+  "generated": "2026-11-02",
+  "index_version": "v2",
+  "software_version": "0.0.1",
+  "provider": "forecast",
+  "details": {
+    "fire_cases": 323,
+    "control_cases": 323,
+    "rho": {
+      "value": -0.11197493997567712,
+      "low": -0.21368248991217878,
+      "high": -0.010253841607880494
+    },
+    "partial_rho": {
+      "value": -0.10792258761977815,
+      "low": -0.21381891967347313,
+      "high": -0.003130240384461197
+    },
+    "within_month_rho": {
+      "value": 0.015016437964410958,
+      "n": 323
+    },
+    "bands": [
+      {
+        "name": "en düşük üçte bir",
+        "index_range": [
+          12.0,
+          44.7
+        ],
+        "n": 107,
+        "persisted": 0.7102803738317757,
+        "median_change": -0.8600823202647507
+      },
+      {
+        "name": "orta üçte bir",
+        "index_range": [
+          44.9,
+          62.6
+        ],
+        "n": 108,
+        "persisted": 0.6296296296296297,
+        "median_change": -2.3915589707002693
+      },
+      {
+        "name": "en yüksek üçte bir",
+        "index_range": [
+          62.6,
+          84.9
+        ],
+        "n": 108,
+        "persisted": 0.6944444444444444,
+        "median_change": -1.7532617297093962
+      }
+    ],
+    "auc": {
+      "value": 0.6899759414927776,
+      "low": 0.6504457438650306,
+      "high": 0.7295295833013583,
+      "fire_mean": 53.00402476780186,
+      "control_mean": 38.319814241486064
+    }
+  }
+}

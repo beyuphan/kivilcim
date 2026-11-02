@@ -424,7 +424,8 @@ def create_app(
                 settings.open_meteo_daily_quota,
             )
         except WeatherUnavailable:
-            raise HTTPException(status_code=503, detail="Weather data is temporarily unavailable.")
+            # `from None`: the cause (which can name the provider's URL) is not passed on to the client.
+            raise HTTPException(status_code=503, detail="Weather data is temporarily unavailable.") from None
 
     def get_session() -> Iterator[Session]:
         with session_factory() as session:

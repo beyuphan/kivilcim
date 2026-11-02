@@ -27,7 +27,20 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-kivilcim = ["static/*"]
+# Every file under static/ must be listed (a test checks it), or an installed copy would miss it.
+kivilcim = ["static/*", "static/icons/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = [
+    "E501",  # line length is a guide, not a rule
+    "B008",  # FastAPI declares parameters with Query() and Depends() in the signature on purpose
+    "UP017",  # datetime.timezone.utc is used throughout and works on every supported version
+]

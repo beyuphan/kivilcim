@@ -116,7 +116,7 @@
   <div class="mapwrap">
     <div id="map"></div>
     <div class="legend" aria-label="Harita açıklaması">
-      <strong>Aktif tespit bölgeleri</strong>: renk, oradaki havanın yangının sürmesi için elverişliliği (deneysel)
+      <strong>Aktif tespit bölgeleri</strong>: renk, oradaki havanın yangın için elverişliliği (deneysel)
       <div class="row">
         <span><i style="background:#15803d"></i>Düşük</span><span><i style="background:#b45309"></i>Orta</span>
         <span><i style="background:#c2410c"></i>Yüksek</span><span><i style="background:#b91c1c"></i>Çok yüksek</span>
@@ -232,7 +232,7 @@ function zonePopup(z) {
   box.appendChild(el("div", z.detections + " uydu tespiti · toplam " + decimal.format(z.total_frp_mw) + " MW · en güçlü " + decimal.format(z.max_frp_mw) + " MW"));
   box.appendChild(el("div", "Son gözlem: " + ago(z.age_minutes)));
   if (z.risk) {
-    const line = el("div", "Havanın yayılmaya elverişliliği (deneysel): ");
+    const line = el("div", "Yangına elverişli hava (deneysel): ");
     line.appendChild(levelBadge(z.risk));
     box.appendChild(line);
     box.appendChild(el("div", z.risk.drivers.length ? "Öne çıkan: " + z.risk.drivers.map((d) => DRIVERS[d] || d).join(", ") : "Öne çıkan etken yok", "small"));
@@ -337,7 +337,7 @@ function renderWeather(result) {
 
 function renderRisk(nearest, radiusKm) {
   const box = $("riskCard");
-  box.replaceChildren(el("h2", "Yangının yayılması için elverişlilik (deneysel)"));
+  box.replaceChildren(el("h2", "Yangına elverişli hava (deneysel)"));
   if (!nearest) {
     box.appendChild(el("div", "Bu çevrede (" + radiusKm + " km) aktif bir tespit bölgesi yok, bu yüzden bir değer gösterilmiyor. "
       + "Bu bölgenin güvenli olduğu anlamına gelmez; yalnızca anlatılacak bir tespit olmadığı anlamına gelir.", "small"));
@@ -353,8 +353,8 @@ function renderRisk(nearest, radiusKm) {
   } else {
     box.append(title, el("div", "Bu bölge için hava durumu şu an alınamadı.", "small"));
   }
-  box.appendChild(el("div", "Bu bir yayılma tahmini ya da olasılık değildir; yalnızca havanın yangının sürmesi ve yayılması için ne kadar elverişli olduğunu gösterir. "
-    + "Deneysel ve henüz doğrulanmadı (bkz. Yöntem ve sınırlar). Bitki örtüsü, arazi ve kuraklık geçmişi hesaba katılmaz.", "small"));
+  box.appendChild(el("div", "Havanın yangın için ne kadar elverişli olduğunu gösterir (sıcak, kuru, rüzgarlı, yağışsız). Bir yangının ertesi gün sürüp sürmeyeceğini, yayılacağını ya da olasılığını tahmin etmez. "
+    + "Deneysel; geçmiş verilerle ne ölçüde işe yaradığı için Yöntem ve sınırlar sayfasına bakın. Bitki örtüsü, arazi ve kuraklık geçmişi hesaba katılmaz.", "small"));
 }
 
 function renderDetail(fires, weather) {

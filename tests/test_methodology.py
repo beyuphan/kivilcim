@@ -6,9 +6,9 @@ from fastapi.testclient import TestClient
 from kivilcim.api import FRESH_HOURS, WARNING_HOURS, create_app
 from kivilcim.db import init_db, make_engine, make_session_factory
 from kivilcim.events import ATTACH_DAYS_AFTER, ATTACH_DAYS_BEFORE, MAX_DAYS, MIN_DETECTIONS, MIN_MAX_FRP, MIN_TOTAL_FRP
+from kivilcim.firms import confidence_level
 from kivilcim.fixed import MIN_HISTORY_DAYS, RECURRING_SHARE
 from kivilcim.risk import INDEX_VERSION, LEVELS, RAMPS, WEIGHTS
-from kivilcim.firms import confidence_level
 
 
 @pytest.fixture(scope="module")

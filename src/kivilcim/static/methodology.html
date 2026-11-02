@@ -46,9 +46,9 @@
 </div>
 
 <h2>Bu site ne yapar, ne yapmaz</h2>
-<p>Kıvılcım, NASA'nın uydu verisinden Türkiye'deki ısı tespitlerini gösterir ve aktif bir tespitin çevresinde havanın yangının sürmesi için
-ne kadar elverişli olduğunu söyler. Bir yangının nereye yayılacağını tahmin etmez, "yangın olasılığı" vermez, bir bölgenin güvenli
-olduğunu söylemez. Tespit görünmemesi, yangın olmadığı anlamına gelmez.</p>
+<p>Kıvılcım, NASA'nın uydu verisinden Türkiye'deki ısı tespitlerini gösterir ve aktif bir tespitin çevresinde havanın yangın için
+ne kadar elverişli olduğunu (sıcak, kuru, rüzgarlı, yağışsız) söyler. Bir yangının ertesi gün sürüp sürmeyeceğini ya da nereye yayılacağını tahmin etmez,
+"yangın olasılığı" vermez, bir bölgenin güvenli olduğunu söylemez. Tespit görünmemesi, yangın olmadığı anlamına gelmez.</p>
 
 <h2>Uydu tespitleri</h2>
 <ul>
@@ -143,6 +143,7 @@ hizmetinin kendi günlükleri ayrıca koordinat içerebilir; kendi sunucunuzu ç
   }).then(function (v) {
     box.replaceChildren();
     box.appendChild(el("p", v.summary));
+    if (v.usage_note) { var u = el("p", v.usage_note); u.style.fontWeight = "600"; box.appendChild(u); }
     if (v.tests && v.tests.length) {
       var wrap = el("div", undefined, "scroll");
       var table = document.createElement("table");

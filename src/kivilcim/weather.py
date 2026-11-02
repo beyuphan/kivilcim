@@ -60,7 +60,7 @@ def parse_forecast(payload: dict) -> dict:
         window_start = observed_at - PRECIP_WINDOW
         values = [
             amount
-            for stamp, amount in zip(hourly["time"], hourly["precipitation"])
+            for stamp, amount in zip(hourly["time"], hourly["precipitation"], strict=True)
             if amount is not None and window_start < _parse_time(stamp) <= observed_at
         ]
         if not values:
@@ -224,7 +224,7 @@ def get_weather_many(
             batch = fetch_weather_batch(client, chunk)
         except WeatherUnavailable:
             continue
-        for key, data in zip(chunk, batch):
+        for key, data in zip(chunk, batch, strict=True):
             if data is None:
                 continue
             snapshot = cached.get(key)

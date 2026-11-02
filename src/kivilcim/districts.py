@@ -38,6 +38,11 @@ def _district_points() -> list[tuple[float, float, str, str]]:
     ]
 
 
+def district_centers() -> list[tuple[float, float]]:
+    """The center points of all districts (approximate)."""
+    return [(lat, lon) for lat, lon, _, _ in _district_points()]
+
+
 def nearest_place(lat: float, lon: float) -> tuple[str, str, float]:
     """The closest district center: (district, province, distance in km). Approximate."""
     distance, district, province = min(
