@@ -55,6 +55,34 @@ class FireDetection(Base):
     ingested_at: Mapped[datetime] = mapped_column(UTCDateTime)
 
 
+class WeatherSnapshot(Base):
+    """Cached Open-Meteo weather for a coordinate rounded to ~0.1 degree."""
+
+    __tablename__ = "weather_snapshots"
+    __table_args__ = (UniqueConstraint("latitude", "longitude", name="uq_weather_location"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    latitude: Mapped[float] = mapped_column(Float)
+    longitude: Mapped[float] = mapped_column(Float)
+    fetched_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    observed_at: Mapped[datetime] = mapped_column(UTCDateTime)  # time of the "current" reading
+    temperature: Mapped[float] = mapped_column(Float)  # degrees C
+    humidity: Mapped[float] = mapped_column(Float)  # %
+    wind_speed: Mapped[float] = mapped_column(Float)  # km/h
+    wind_direction: Mapped[float | None] = mapped_column(Float, nullable=True)  # degrees
+    precip_recent: Mapped[float] = mapped_column(Float)  # mm over the last 72 h
+
+
+class ApiUsage(Base):
+    """Calls made to an external API per UTC day, to stay under its free quota."""
+
+    __tablename__ = "api_usage"
+
+    day: Mapped[str] = mapped_column(String(10), primary_key=True)  # YYYY-MM-DD
+    provider: Mapped[str] = mapped_column(String(32), primary_key=True)
+    calls: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class IngestRun(Base):
     __tablename__ = "ingest_runs"
 

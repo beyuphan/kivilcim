@@ -65,6 +65,8 @@ Endpoints:
 - `GET /health`: is the service up
 - `GET /status`: last successful update and delay per source, plus `data_as_of`
 - `GET /fires?lat=&lon=&radius_km=&since_hours=`: nearby detections with observation time, confidence and distance. Low-confidence detections are listed separately.
+- `GET /weather?lat=&lon=`: current weather for a point in Turkey (temperature, humidity, wind, rain over 72 hours), cached per ~11 km.
+- `GET /risk?lat=&lon=`: experimental fire danger level from that weather, with the factors behind it. It describes weather conditions, not the probability of a fire.
 
 ## Configuration
 

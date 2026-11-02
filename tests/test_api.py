@@ -1,9 +1,12 @@
 from datetime import datetime, timedelta, timezone
 
+import httpx
 import pytest
+import respx
 from fastapi.testclient import TestClient
 
 from kivilcim.api import create_app
+from kivilcim.config import Settings
 from kivilcim.db import init_db, make_engine, make_session_factory
 from kivilcim.models import FireDetection, IngestRun
 
@@ -85,6 +88,121 @@ def test_district_data_is_served_as_static_json(client):
     data = response.json()
     assert len(data["provinces"]) == 81
     assert "OpenStreetMap" in data["attribution"]
+
+
+# ---- /weather and /risk -----------------------------------------------------
+
+OPEN_METEO = {"host": "api.open-meteo.com", "path": "/v1/forecast"}
+
+
+def open_meteo_payload() -> dict:
+    start = datetime(2026, 6, 28, 0, 0)
+    times = [(start + timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M") for i in range(96)]
+    return {
+        "current": {
+            "time": "2026-07-01T12:00",
+            "temperature_2m": 33.5,
+            "relative_humidity_2m": 22,
+            "wind_speed_10m": 28.4,
+            "wind_direction_10m": 240,
+        },
+        "hourly": {"time": times, "precipitation": [0.0] * 96},
+    }
+
+
+def weather_client(session_factory, **settings):
+    app = create_app(
+        session_factory,
+        now=lambda: NOW,
+        http_client=httpx.Client(),
+        settings=Settings(_env_file=None, **settings),
+    )
+    return TestClient(app)
+
+
+@respx.mock
+def test_weather_returns_fields_attribution_and_cache_status(session_factory):
+    respx.route(**OPEN_METEO).respond(200, json=open_meteo_payload())
+    client = weather_client(session_factory)
+
+    first = client.get("/weather", params={"lat": 39.93, "lon": 32.86}).json()
+    second = client.get("/weather", params={"lat": 39.93, "lon": 32.86}).json()
+
+    weather = first["weather"]
+    assert (weather["latitude"], weather["longitude"]) == (39.9, 32.9)
+    assert weather["temperature_c"] == 33.5
+    assert weather["humidity_pct"] == 22
+    assert weather["wind_speed_kmh"] == 28.4
+    assert weather["precip_72h_mm"] == 0
+    assert weather["observed_at"].startswith("2026-07-01T12:00:00")
+    assert first["weather"]["cache_status"] == "fresh"
+    assert second["weather"]["cache_status"] == "cached"
+    assert "Open-Meteo" in first["attribution"]
+    assert "112" in first["disclaimer"]
+
+
+@respx.mock
+def test_risk_returns_an_experimental_level_with_reasons(session_factory):
+    respx.route(**OPEN_METEO).respond(200, json=open_meteo_payload())
+    body = weather_client(session_factory).get("/risk", params={"lat": 39.9, "lon": 32.9}).json()
+
+    risk = body["risk"]
+    assert risk["score"] == 80.4
+    assert risk["level"] == "extreme"
+    assert risk["drivers"] == ["humidity", "rain", "temperature"]
+    assert risk["experimental"] is True
+    assert risk["index_version"] == "v1"
+    assert "not the probability" in risk["note"]
+    assert body["weather"]["temperature_c"] == 33.5
+    assert "Open-Meteo" in body["attribution"]
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"lat": 10, "lon": 32},
+        {"lat": 39, "lon": 100},
+        {"lat": 35.4, "lon": 32},
+        {"lat": 42.6, "lon": 32},
+        {"lat": 39, "lon": 25.4},
+        {"lat": 39, "lon": 45.6},
+        {"lat": "abc", "lon": 32},
+    ],
+)
+@pytest.mark.parametrize("path", ["/weather", "/risk"])
+def test_weather_and_risk_reject_points_outside_turkey(session_factory, path, params):
+    # No mock is registered: if the request were not rejected first it would try the network.
+    assert weather_client(session_factory).get(path, params=params).status_code == 422
+
+
+@respx.mock
+def test_weather_and_risk_accept_the_edge_of_the_allowed_box(session_factory):
+    respx.route(**OPEN_METEO).respond(200, json=open_meteo_payload())
+    client = weather_client(session_factory)
+    assert client.get("/risk", params={"lat": 35.5, "lon": 25.5}).status_code == 200
+    assert client.get("/risk", params={"lat": 42.5, "lon": 45.5}).status_code == 200
+
+
+@respx.mock
+def test_upstream_failure_gives_a_generic_503(session_factory):
+    respx.route(**OPEN_METEO).respond(500, text="internal secret detail")
+    response = weather_client(session_factory).get("/risk", params={"lat": 39.9, "lon": 32.9})
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Weather data is temporarily unavailable."}
+    assert "secret" not in response.text
+
+
+@respx.mock
+def test_quota_stops_new_calls_and_the_cache_keeps_serving(session_factory):
+    route = respx.route(**OPEN_METEO).respond(200, json=open_meteo_payload())
+    client = weather_client(session_factory, open_meteo_daily_quota=1)
+
+    assert client.get("/weather", params={"lat": 39.9, "lon": 32.9}).status_code == 200
+    # Same area: cached. A different area: quota spent and nothing cached -> 503.
+    assert client.get("/weather", params={"lat": 39.9, "lon": 32.9}).json()["weather"]["cache_status"] == "cached"
+    assert client.get("/weather", params={"lat": 41.0, "lon": 29.0}).status_code == 503
+    assert route.call_count == 1
 
 
 # ---- /fires -----------------------------------------------------------------

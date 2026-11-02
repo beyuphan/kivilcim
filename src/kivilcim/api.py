@@ -3,22 +3,26 @@
 Start with: uvicorn kivilcim.api:create_app --factory
 """
 
-from collections.abc import Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
-from fastapi import Depends, FastAPI, Query
+import httpx
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from kivilcim.config import get_settings
+from kivilcim.config import Settings, get_settings
 from kivilcim.db import init_db, make_engine, make_session_factory
 from kivilcim.geo import bounding_box, haversine_km
-from kivilcim.models import FireDetection, IngestRun
+from kivilcim.models import FireDetection, IngestRun, WeatherSnapshot
+from kivilcim.risk import compute_risk
+from kivilcim.weather import ATTRIBUTION, CacheStatus, WeatherUnavailable, get_weather
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -33,6 +37,11 @@ WARNING_HOURS = 6
 
 MAX_RADIUS_KM = 500
 MAX_SINCE_HOURS = 168
+
+# Weather and risk queries are limited to a loose box around Turkey, so nobody can use the
+# service to scan the world and use up the weather API's call quota.
+TURKEY_LAT = (35.5, 42.5)
+TURKEY_LON = (25.5, 45.5)
 
 Freshness = Literal["fresh", "warning", "stale", "unknown"]
 
@@ -89,6 +98,63 @@ class FiresResponse(BaseModel):
     low_confidence: list[FireOut]  # shown separately, never mixed in
     data_as_of: DataAsOf
     disclaimer: str
+
+
+class WeatherOut(BaseModel):
+    latitude: float  # the rounded point the weather is for
+    longitude: float
+    observed_at: datetime
+    fetched_at: datetime
+    temperature_c: float
+    humidity_pct: float
+    wind_speed_kmh: float
+    wind_direction_deg: float | None
+    precip_72h_mm: float
+    cache_status: CacheStatus
+
+
+class WeatherResponse(BaseModel):
+    weather: WeatherOut
+    attribution: str
+    disclaimer: str
+
+
+class RiskOut(BaseModel):
+    score: float
+    level: str
+    drivers: list[str]
+    contributions: dict[str, float]
+    index_version: str
+    experimental: bool
+    note: str
+
+
+class RiskResponse(BaseModel):
+    risk: RiskOut
+    weather: WeatherOut
+    attribution: str
+    disclaimer: str
+
+
+RISK_NOTE = (
+    "Experimental fire danger level from current weather. It shows how favorable the weather "
+    "is for fires, not the probability that a fire will happen."
+)
+
+
+def weather_out(snapshot: WeatherSnapshot, status: CacheStatus) -> WeatherOut:
+    return WeatherOut(
+        latitude=snapshot.latitude,
+        longitude=snapshot.longitude,
+        observed_at=snapshot.observed_at,
+        fetched_at=snapshot.fetched_at,
+        temperature_c=snapshot.temperature,
+        humidity_pct=snapshot.humidity,
+        wind_speed_kmh=snapshot.wind_speed,
+        wind_direction_deg=snapshot.wind_direction,
+        precip_72h_mm=snapshot.precip_recent,
+        cache_status=status,
+    )
 
 
 def freshness_of(last_ingest_at: datetime | None, now: datetime) -> Freshness:
@@ -152,17 +218,43 @@ def data_as_of(session: Session, now: datetime) -> DataAsOf:
 def create_app(
     session_factory: sessionmaker[Session] | None = None,
     now: Callable[[], datetime] | None = None,
+    http_client: httpx.Client | None = None,
+    settings: Settings | None = None,
 ) -> FastAPI:
+    settings = settings or get_settings()
     if session_factory is None:
-        engine = make_engine(get_settings().database_url)
+        engine = make_engine(settings.database_url)
         init_db(engine)
         session_factory = make_session_factory(engine)
     clock = now or (lambda: datetime.now(timezone.utc))
+    owns_client = http_client is None
+    weather_client = http_client or httpx.Client(timeout=15)
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        yield
+        if owns_client:
+            weather_client.close()
 
     app = FastAPI(
         title="Kıvılcım",
         description=f"Wildfire detections from NASA FIRMS satellite data. {DISCLAIMER}",
+        lifespan=lifespan,
     )
+
+    def current_weather(session: Session, lat: float, lon: float):
+        try:
+            return get_weather(
+                session,
+                weather_client,
+                lat,
+                lon,
+                clock(),
+                settings.weather_cache_minutes,
+                settings.open_meteo_daily_quota,
+            )
+        except WeatherUnavailable:
+            raise HTTPException(status_code=503, detail="Weather data is temporarily unavailable.")
 
     def get_session() -> Iterator[Session]:
         with session_factory() as session:
@@ -231,6 +323,43 @@ def create_app(
             fires=[f for f in found if f.confidence_level != "low"],
             low_confidence=[f for f in found if f.confidence_level == "low"],
             data_as_of=data_as_of(session, current),
+            disclaimer=DISCLAIMER,
+        )
+
+    @app.get("/weather", response_model=WeatherResponse)
+    def weather(
+        lat: float = Query(ge=TURKEY_LAT[0], le=TURKEY_LAT[1]),
+        lon: float = Query(ge=TURKEY_LON[0], le=TURKEY_LON[1]),
+        session: Session = Depends(get_session),
+    ) -> WeatherResponse:
+        result = current_weather(session, lat, lon)
+        return WeatherResponse(
+            weather=weather_out(result.snapshot, result.status),
+            attribution=ATTRIBUTION,
+            disclaimer=DISCLAIMER,
+        )
+
+    @app.get("/risk", response_model=RiskResponse)
+    def risk(
+        lat: float = Query(ge=TURKEY_LAT[0], le=TURKEY_LAT[1]),
+        lon: float = Query(ge=TURKEY_LON[0], le=TURKEY_LON[1]),
+        session: Session = Depends(get_session),
+    ) -> RiskResponse:
+        result = current_weather(session, lat, lon)
+        snap = result.snapshot
+        scored = compute_risk(snap.temperature, snap.humidity, snap.wind_speed, snap.precip_recent)
+        return RiskResponse(
+            risk=RiskOut(
+                score=scored.score,
+                level=scored.level,
+                drivers=scored.drivers,
+                contributions=scored.contributions,
+                index_version=scored.index_version,
+                experimental=True,
+                note=RISK_NOTE,
+            ),
+            weather=weather_out(snap, result.status),
+            attribution=ATTRIBUTION,
             disclaimer=DISCLAIMER,
         )
 

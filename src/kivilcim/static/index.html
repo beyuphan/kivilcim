@@ -23,6 +23,10 @@
   .tagline { color: var(--muted); font-size: 13px; }
   .disclaimer { margin: 8px 16px; padding: 8px 12px; border: 1px solid var(--line);
                 border-left: 4px solid var(--stale); background: var(--panel); font-size: 13px; }
+  .risk { margin: 8px 16px; padding: 10px 12px; background: var(--panel);
+          border: 1px solid var(--line); border-left: 4px solid var(--unknown); border-radius: 6px; font-size: 14px; }
+  .risk .level { font-size: 18px; font-weight: 700; }
+  .risk .small { font-size: 12px; color: var(--muted); margin-top: 4px; }
   .status { margin: 8px 16px; padding: 10px 12px; background: var(--panel);
             border: 1px solid var(--line); border-radius: 6px; }
   .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; color: #fff;
@@ -87,6 +91,7 @@
 
 <div class="hint">İl/ilçe seçin, haritaya tıklayın ya da konumunuzu kullanın. İl ve ilçe konumları yaklaşık merkez noktalarıdır. Gösterilen alan, seçili noktanın çevresindeki dairedir.</div>
 <div id="map"></div>
+<div class="risk" id="risk" hidden></div>
 <div id="summary"></div>
 <div id="notice"></div>
 <div class="table-wrap">
@@ -99,6 +104,7 @@
 <footer>
   Yangın verisi: <a href="https://firms.modaps.eosdis.nasa.gov/">NASA FIRMS</a>.
   Harita ve il/ilçe merkez noktaları: © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> katkıcıları, ODbL 1.0. Resmi sınır verisi değildir.
+  Hava verisi: <a href="https://open-meteo.com/">Open-Meteo.com</a> (CC BY 4.0).
   Her nokta uydunun o anki gözlemidir; "şu an yanıyor" anlamına gelmez.
 </footer>
 
@@ -217,7 +223,66 @@ function render(data) {
   renderStatus(data.data_as_of);
 }
 
+const LEVELS = {
+  low: ["Düşük", "#15803d"], moderate: ["Orta", "#b45309"], high: ["Yüksek", "#c2410c"],
+  very_high: ["Çok yüksek", "#b91c1c"], extreme: ["Aşırı", "#7f1d1d"],
+};
+const DRIVERS = { humidity: "kuru hava", wind: "güçlü rüzgar", temperature: "sıcak hava", rain: "yağışsız dönem" };
+const decimal = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 1 });
+let riskId = 0;
+
+function renderRisk(data) {
+  const { risk, weather } = data;
+  const [label, color] = LEVELS[risk.level] || [risk.level, "#5b6470"];
+  const box = $("risk");
+  box.style.borderLeftColor = color;
+  const title = el("div");
+  title.appendChild(document.createTextNode("Yangın tehlike seviyesi (deneysel): "));
+  const level = el("span", label, "level");
+  level.style.color = color;
+  title.appendChild(level);
+  title.appendChild(document.createTextNode(" · " + decimal.format(risk.score) + "/100"));
+  const why = risk.drivers.length
+    ? "Öne çıkan etkenler: " + risk.drivers.map((d) => DRIVERS[d] || d).join(", ") + "."
+    : "Öne çıkan bir tehlike etkeni yok.";
+  const values = "Sıcaklık " + decimal.format(weather.temperature_c) + " °C · Nem %" + Math.round(weather.humidity_pct)
+    + " · Rüzgar " + decimal.format(weather.wind_speed_kmh) + " km/sa · Son 72 saat yağış "
+    + decimal.format(weather.precip_72h_mm) + " mm (hava ölçümü: " + fmt.format(new Date(weather.observed_at))
+    + ", yaklaşık " + weather.latitude.toFixed(1) + ", " + weather.longitude.toFixed(1) + " noktası)";
+  box.replaceChildren(
+    title,
+    el("div", why),
+    el("div", values, "small"),
+    el("div", "Bu bir yangın olasılığı değildir; yalnızca havanın yangınlar için ne kadar elverişli olduğunu gösterir. "
+      + "Deneysel ve henüz doğrulanmadı. Bitki örtüsü, arazi ve kuraklık geçmişi hesaba katılmaz.", "small"),
+  );
+}
+
+async function loadRisk() {
+  const id = ++riskId;
+  const box = $("risk");
+  box.hidden = false;
+  box.style.borderLeftColor = "";
+  box.textContent = "Yangın tehlike seviyesi yükleniyor…";
+  try {
+    const response = await fetch("/risk?" + new URLSearchParams({
+      lat: point.lat.toFixed(5), lon: point.lon.toFixed(5),
+    }));
+    if (id !== riskId) return;
+    if (response.status === 422) {
+      box.textContent = "Yangın tehlike seviyesi yalnızca Türkiye içindeki konumlar için hesaplanır.";
+      return;
+    }
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json();
+    if (id === riskId) renderRisk(data);
+  } catch (error) {
+    if (id === riskId) box.textContent = "Yangın tehlike seviyesi şu an alınamadı. Bu, tehlike olmadığı anlamına gelmez.";
+  }
+}
+
 async function load() {
+  loadRisk();
   const id = ++requestId;
   const params = new URLSearchParams({
     lat: point.lat.toFixed(5), lon: point.lon.toFixed(5),

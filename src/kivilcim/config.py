@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     # lets a missed run be recovered; deduplication makes the overlap harmless.
     firms_day_range: int = 2
 
+    # Open-Meteo's free tier allows 10,000 calls per day. This is a call count, not money:
+    # the service stops asking and serves cached weather before reaching that limit.
+    open_meteo_daily_quota: int = 7000
+    weather_cache_minutes: int = 45
+
     @property
     def source_list(self) -> list[str]:
         return [s.strip() for s in self.firms_sources.split(",") if s.strip()]
