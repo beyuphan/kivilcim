@@ -147,11 +147,11 @@ def test_risk_returns_an_experimental_level_with_reasons(session_factory):
     body = weather_client(session_factory).get("/risk", params={"lat": 39.9, "lon": 32.9}).json()
 
     risk = body["risk"]
-    assert risk["score"] == 80.4
+    assert risk["score"] == 80.9
     assert risk["level"] == "extreme"
     assert risk["drivers"] == ["humidity", "rain", "temperature"]
     assert risk["experimental"] is True
-    assert risk["index_version"] == "v1"
+    assert risk["index_version"] == "v2"
     assert "not the probability" in risk["note"]
     assert body["weather"]["temperature_c"] == 33.5
     assert "Open-Meteo" in body["attribution"]

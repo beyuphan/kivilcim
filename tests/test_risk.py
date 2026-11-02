@@ -3,8 +3,9 @@ import pytest
 from kivilcim.risk import INDEX_VERSION, WEIGHTS, compute_risk, level_for
 
 
-def test_weights_add_up_to_one():
-    assert sum(WEIGHTS.values()) == pytest.approx(1.0)
+def test_dryness_weights_add_up_to_less_than_one_because_temperature_is_a_multiplier():
+    assert set(WEIGHTS) == {"humidity", "wind", "rain"}
+    assert sum(WEIGHTS.values()) == pytest.approx(0.8)
 
 
 def test_worst_conditions_give_the_maximum_score():
@@ -22,17 +23,43 @@ def test_calm_cool_wet_conditions_give_the_minimum_score():
 
 
 def test_known_mixed_example():
-    # temperature 0.5, humidity 30/55, wind 0.5, rain 1.0 -> 10 + 19.09 + 12.5 + 20
+    # dryness = (0.35*30/55 + 0.25*0.5 + 0.20*1) / 0.80 = 0.6449; temperature multiplier = 20/25 = 0.8
     result = compute_risk(temperature_c=25, humidity_pct=40, wind_kmh=25, precip_72h_mm=0)
-    assert result.score == 61.6
-    assert result.level == "very_high"
+    assert result.score == 51.6
+    assert result.level == "high"
 
 
 def test_hot_dry_windy_spell_is_flagged_with_its_drivers():
     result = compute_risk(temperature_c=33.5, humidity_pct=22, wind_kmh=28.4, precip_72h_mm=0)
-    assert result.score == 80.4
+    assert result.score == 80.9
     assert result.level == "extreme"
-    assert result.drivers == ["humidity", "rain", "temperature"]  # strongest first; wind is only 0.57
+    # Strongest dryness factors first, then temperature; wind is only 0.57 so it is not a driver.
+    assert result.drivers == ["humidity", "rain", "temperature"]
+
+
+def test_cold_dry_windy_day_is_not_high():
+    # The v1 mistake: it called conditions like these "high" in the cold season.
+    result = compute_risk(temperature_c=8, humidity_pct=20, wind_kmh=40, precip_72h_mm=0)
+    assert result.level == "low"
+    assert "temperature" not in result.drivers
+
+
+def test_cool_autumn_day_with_dry_spell_stays_moderate_at_most():
+    # Real readings for Kayseri on 2 Nov 2026 (v1 scored this 48.9, "high").
+    result = compute_risk(temperature_c=15.9, humidity_pct=40, wind_kmh=11.8, precip_72h_mm=0)
+    assert result.level == "moderate"
+    assert result.score == pytest.approx(24.5, abs=0.1)
+
+
+def test_hot_but_wet_and_humid_is_low():
+    result = compute_risk(temperature_c=35, humidity_pct=75, wind_kmh=5, precip_72h_mm=12)
+    assert result.level == "low"
+    assert result.drivers == []  # the air is too damp for heat alone to count as a driver
+
+
+def test_temperature_alone_cannot_raise_the_level_much():
+    humid = compute_risk(temperature_c=40, humidity_pct=70, wind_kmh=0, precip_72h_mm=10)
+    assert humid.score == 0
 
 
 def test_rain_lowers_the_score():
@@ -44,8 +71,15 @@ def test_rain_lowers_the_score():
 
 
 def test_contributions_add_up_to_the_score():
-    result = compute_risk(28, 35, 22, 1.5)
-    assert sum(result.contributions.values()) == pytest.approx(result.score, abs=0.2)
+    for args in [(28, 35, 22, 1.5), (33.5, 22, 28.4, 0), (15.9, 40, 11.8, 0), (40, 15, 50, 0)]:
+        result = compute_risk(*args)
+        assert sum(result.contributions.values()) == pytest.approx(result.score, abs=0.2)
+
+
+def test_zero_score_has_zero_contributions():
+    result = compute_risk(temperature_c=3, humidity_pct=20, wind_kmh=40, precip_72h_mm=0)
+    assert result.score == 0
+    assert all(value == 0 for value in result.contributions.values())
 
 
 @pytest.mark.parametrize(
