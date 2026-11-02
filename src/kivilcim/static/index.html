@@ -221,6 +221,11 @@ function render(data) {
   }
   $("list").hidden = all.length === 0;
   renderStatus(data.data_as_of);
+
+  if (data.fires.length) loadRisk(data.fires[0]);
+  else hideRisk(all.length
+    ? "Yalnızca düşük güvenli tespit var; hava durumuna dayalı bir elverişlilik değeri gösterilmiyor."
+    : "");
 }
 
 const LEVELS = {
@@ -231,13 +236,22 @@ const DRIVERS = { humidity: "kuru hava", wind: "güçlü rüzgar", temperature: 
 const decimal = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 1 });
 let riskId = 0;
 
-function renderRisk(data) {
+function hideRisk(message) {
+  riskId++;
+  const box = $("risk");
+  box.hidden = !message;
+  box.style.borderLeftColor = "";
+  box.textContent = message || "";
+}
+
+function renderRisk(data, fire) {
   const { risk, weather } = data;
   const [label, color] = LEVELS[risk.level] || [risk.level, "#5b6470"];
   const box = $("risk");
   box.style.borderLeftColor = color;
   const title = el("div");
-  title.appendChild(document.createTextNode("Yangın tehlike seviyesi (deneysel): "));
+  title.appendChild(document.createTextNode("En yakın uydu tespiti çevresinde hava (" + decimal.format(fire.distance_km)
+    + " km uzakta), yangının yayılması için elverişlilik, deneysel: "));
   const level = el("span", label, "level");
   level.style.color = color;
   title.appendChild(level);
@@ -253,36 +267,34 @@ function renderRisk(data) {
     title,
     el("div", why),
     el("div", values, "small"),
-    el("div", "Bu bir yangın olasılığı değildir; yalnızca havanın yangınlar için ne kadar elverişli olduğunu gösterir. "
-      + "Deneysel ve henüz doğrulanmadı. Bitki örtüsü, arazi ve kuraklık geçmişi hesaba katılmaz.", "small"),
+    el("div", "Bu bir yayılma tahmini ya da olasılık değildir; yalnızca havanın yangının sürmesi ve yayılması için ne kadar "
+      + "elverişli olduğunu gösterir. Deneysel ve henüz doğrulanmadı. Bitki örtüsü, arazi ve kuraklık geçmişi hesaba katılmaz.", "small"),
   );
 }
 
-async function loadRisk() {
+// Risk is only shown around a satellite detection. For a place with no detection there is
+// nothing to extend from, so no risk figure is shown at all.
+async function loadRisk(fire) {
   const id = ++riskId;
   const box = $("risk");
   box.hidden = false;
   box.style.borderLeftColor = "";
-  box.textContent = "Yangın tehlike seviyesi yükleniyor…";
+  box.textContent = "Tespit çevresindeki hava durumu yükleniyor…";
   try {
     const response = await fetch("/risk?" + new URLSearchParams({
-      lat: point.lat.toFixed(5), lon: point.lon.toFixed(5),
+      lat: fire.latitude.toFixed(5), lon: fire.longitude.toFixed(5),
     }));
     if (id !== riskId) return;
-    if (response.status === 422) {
-      box.textContent = "Yangın tehlike seviyesi yalnızca Türkiye içindeki konumlar için hesaplanır.";
-      return;
-    }
+    if (response.status === 422) { hideRisk("Hava ve elverişlilik yalnızca Türkiye içindeki tespitler için hesaplanır."); return; }
     if (!response.ok) throw new Error("HTTP " + response.status);
     const data = await response.json();
-    if (id === riskId) renderRisk(data);
+    if (id === riskId) renderRisk(data, fire);
   } catch (error) {
-    if (id === riskId) box.textContent = "Yangın tehlike seviyesi şu an alınamadı. Bu, tehlike olmadığı anlamına gelmez.";
+    if (id === riskId) box.textContent = "Tespit çevresindeki hava durumu şu an alınamadı.";
   }
 }
 
 async function load() {
-  loadRisk();
   const id = ++requestId;
   const params = new URLSearchParams({
     lat: point.lat.toFixed(5), lon: point.lon.toFixed(5),

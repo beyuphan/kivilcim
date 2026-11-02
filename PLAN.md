@@ -30,7 +30,7 @@ Included in the MVP:
 4. A simple weather summary for the location (wind, humidity, temperature).
 5. A responsibility note on every page (not an official warning; data may be delayed).
 6. The data ingestion job runs regularly, and the last successful update time is visible in the API.
-7. A **fire danger (risk) index**: a rule-based index computed from current weather. The map shows it as colored zones around active fire clusters, and a point query returns the level for any location in Turkey, with the reasons behind it. It is labeled experimental until validated (see section 9).
+7. A **spread-favorability index around active fires**: a rule-based index computed from the current weather at an active fire detection. It says how favorable the weather is for the fire to continue and spread, with the reasons behind it. It is shown only where there is an active detection, never as a general "fire risk" for a place without one. It is not a spread forecast or a probability, and it is labeled experimental until validated (see section 9).
 
 Deliberately **out of scope** for the MVP:
 
@@ -123,7 +123,7 @@ Every response includes a `data_as_of` field and a short `disclaimer` field (not
 **Approach (decided):** rule-based and transparent. No machine learning in the MVP.
 - **Two paths, one formula:**
   - **Fire zones (map layer):** recent active detections are clustered by proximity (provisional: detections within ~10 km of each other form one cluster; the zone is drawn as a circle of ~50 km around the cluster center, both to be tuned). One Open-Meteo point per cluster is fetched, in a single multi-location request. The result is shown as a colored zone on the map with its level.
-  - **Point query (`/risk`):** for a location without an active fire, the weather for that point (rounded to ~0.1°) is fetched on demand and cached for 30-60 minutes. This answers "how dangerous is the fire weather in my area today?".
+  - **Point query (`/risk`):** the weather for a point (rounded to ~0.1°) is fetched on demand and cached for 30-60 minutes. This is a building block: the web page calls it only for the nearest active detection of the selected area. For a place with no detection the page shows no risk at all, because there is nothing for a fire to spread from, and a general "fire risk" figure for such a place would mislead (decided after testing: a place with no fire for months should not read as a risk percentage).
 - **Inputs (Open-Meteo):** temperature, relative humidity, wind speed, recent precipitation.
 - **Score:** the inputs are combined into a 0-100 score and a level (low / moderate / high / very high / extreme). The formula is documented in the repo and versioned (`index_version`). Each result keeps its inputs, so the UI can say why ("high: hot, dry, windy, no rain for N days"). Decided: index `v2` is a simplified, transparent formula. Dryness is a weighted average of three factors scaled 0 to 1 with linear ramps: humidity 0.35 (70% to 15%), wind 0.25 (0 to 50 km/h) and dry spell 0.20 (10 mm to 0 mm of rain in the last 72 hours). Temperature is a multiplier, 0 at 5 °C and below and 1 at 30 °C and above, so cold weather keeps the score low even when the air is dry and windy. Levels: under 20 low, 40 moderate, 60 high, 80 very high, above that extreme. The weights and ramps are a reasoned starting point, not calibrated; Stage 4 checks them against past fires. What the first checks showed: with `v1`, which added temperature to the sum, 14 of 81 province centers were "high" on 2 November 2026 at 2-24 °C, so `v2` made temperature a multiplier; `v2` gave 67 low and 14 moderate that day. A sanity check on 2021 weather scored the days of the Manavgat, Marmaris and Milas/Bodrum fires 73-81 (very high or extreme) and winter and spring control days 10-19 (low). It only separates summer from winter, though: an ordinary August midday in Ankara also scored 68.5. In the dry season the index will often be very high, so levels may saturate and thresholds may need to be relative; Stage 4 checks how often high levels coincide with fires. The full Canadian Fire Weather Index (FWI) system is left for after that validation, since it needs daily weather and a few weeks of spin-up history.
 - **Refresh:** the zones command (`python -m kivilcim.risk`) runs hourly after ingest, separate from the API. Cluster count is capped per run (provisional: 200).
@@ -135,7 +135,7 @@ Every response includes a `data_as_of` field and a short `disclaimer` field (not
 - Always shows `valid_date`, `computed_at` and the drivers behind the level.
 - Wording is "fire danger level", never "probability of fire". Around an active fire it describes weather conditions, not where or how fast the fire will spread (spread estimation is out of scope until backtested).
 - States what it leaves out: vegetation and fuel type, terrain, drought history, ignition sources. Weather model resolution is coarse and local conditions can differ.
-- Areas without an active fire have no colored zone on the map. That does not mean the area is safe; the point query is the way to check any location.
+- Areas without an active detection show no risk value and no colored zone. That does not mean the area is safe; it only means there is no detection to describe. The text says so.
 - If a refresh fails, the last good values are shown and marked stale, same as fire data.
 - Open-Meteo is credited in the UI and in the README (CC BY 4.0).
 
@@ -215,7 +215,7 @@ Every response includes a `data_as_of` field and a short `disclaimer` field (not
 
 - Target area: all of Turkey. Ingest uses a Turkey bounding box with no polygon filtering, so detections just across the border may appear (known and accepted for the MVP). A `region` field can be added later if the scope grows.
 - Location input: the backend API takes only latitude/longitude. The province/district to coordinate mapping is handled in the frontend (Stage 3) with static data.
-- Risk index: part of the MVP. Rule-based, weather-only. Computed only around active fire clusters (map layer) and on demand for looked-up locations (cached). No nationwide grid and no machine learning in the MVP. Labeled experimental until the Stage 4 backtest.
+- Risk index: part of the MVP. Rule-based, weather-only. Shown only around active detections (the page asks for the nearest one; clustered zones come later), never as a general risk for a place without a detection. No nationwide grid and no machine learning in the MVP. Labeled experimental until the Stage 4 backtest.
 - Open-Meteo: used under the free non-commercial terms with attribution; the project stays free and ad-free for now.
 - Place data: province/district center points come from OpenStreetMap (ODbL 1.0), kept in `data/` and `static/ilceler.json` with attribution. The code stays MIT; the ODbL data files are separate. They are approximate centers, not official boundaries.
 - License: MIT (see `LICENSE`).
@@ -252,7 +252,7 @@ MVP'de yer alanlar:
 4. Konum için basit bir hava özeti gösterilir (rüzgar, nem, sıcaklık).
 5. Her sayfada sorumluluk notu bulunur (resmi uyarı değildir, veri gecikmeli olabilir).
 6. Veri çekme işi düzenli çalışır ve son başarılı güncelleme zamanı API'de görünür.
-7. **Yangın tehlike (risk) indeksi**: güncel hava durumundan hesaplanan kural tabanlı bir indeks. Harita bunu aktif yangın kümelerinin çevresinde renkli bölgeler olarak gösterir; nokta sorgusu Türkiye'deki her konum için seviyeyi ve nedenlerini döner. Doğrulanana kadar deneysel olarak etiketlenir (bkz. bölüm 9).
+7. **Aktif yangınların çevresinde yayılma elverişlilik indeksi**: aktif bir yangın tespitindeki güncel hava durumundan hesaplanan kural tabanlı bir indeks. Havanın yangının sürmesi ve yayılması için ne kadar elverişli olduğunu nedenleriyle söyler. Yalnızca aktif tespit olan yerde gösterilir; tespiti olmayan bir yer için genel bir "yangın riski" olarak asla gösterilmez. Yayılma tahmini ya da olasılık değildir ve doğrulanana kadar deneysel olarak etiketlenir (bkz. bölüm 9).
 
 MVP'de **olmayanlar** (bilinçli olarak dışarıda):
 
@@ -345,7 +345,7 @@ Her yanıtta `data_as_of` alanı ve kısa bir `disclaimer` alanı bulunur (resmi
 **Yaklaşım (karar verildi):** kural tabanlı ve şeffaf. MVP'de makine öğrenmesi yok.
 - **İki yol, tek formül:**
   - **Yangın bölgeleri (harita katmanı):** son aktif tespitler yakınlığa göre kümelenir (geçici: birbirine ~10 km içindeki tespitler tek küme olur; bölge, küme merkezi çevresinde ~50 km'lik daire olarak çizilir, ikisi de ayarlanacak). Her küme için bir Open-Meteo noktası, tek bir çok konumlu istekle çekilir. Sonuç haritada seviyesiyle renkli bölge olarak gösterilir.
-  - **Nokta sorgusu (`/risk`):** aktif yangın olmayan bir konum için o noktanın (~0,1°'ye yuvarlanmış) hava verisi istek anında çekilir ve 30-60 dakika önbelleğe alınır. "Bugün bölgemde yangın havası ne kadar tehlikeli?" sorusunu bu yol yanıtlar.
+  - **Nokta sorgusu (`/risk`):** bir noktanın (~0,1°'ye yuvarlanmış) hava verisi istek anında çekilir ve 30-60 dakika önbelleğe alınır. Bu bir yapı taşıdır: web sayfası bunu yalnızca seçilen alandaki en yakın aktif tespit için çağırır. Tespiti olmayan bir yer için sayfa hiç risk göstermez, çünkü yangının yayılacağı bir kaynak yoktur ve böyle bir yer için genel bir "yangın riski" değeri yanıltıcı olur (testten sonra karar verildi: aylardır yangın olmayan bir yer yüzde olarak risk gibi okunmamalı).
 - **Girdiler (Open-Meteo):** sıcaklık, bağıl nem, rüzgar hızı, yakın zamandaki yağış.
 - **Skor:** Girdiler 0-100 arası bir skora ve bir seviyeye (low / moderate / high / very high / extreme) dönüştürülür. Formül repoda belgelenir ve sürümlenir (`index_version`). Her sonuç girdileriyle birlikte saklanır; arayüz nedenini söyleyebilir ("yüksek: sıcak, kuru, rüzgarlı, N gündür yağış yok"). Karar: `v2` indeksi sadeleştirilmiş, şeffaf bir formüldür. Kuruluk, doğrusal rampalarla 0-1 arasına ölçeklenen üç etkenin ağırlıklı ortalamasıdır: nem 0,35 (%70'ten %15'e), rüzgar 0,25 (0-50 km/sa) ve kurak dönem 0,20 (son 72 saatte 10 mm'den 0 mm'ye yağış). Sıcaklık bir çarpandır: 5 °C ve altında 0, 30 °C ve üstünde 1; böylece hava kuru ve rüzgarlı olsa bile soğuk hava skoru düşük tutar. Seviyeler: 20'nin altı low, 40 moderate, 60 high, 80 very high, üstü extreme. Ağırlıklar ve rampalar gerekçeli bir başlangıç noktasıdır, kalibre edilmemiştir; Aşama 4 bunları geçmiş yangınlarla kontrol eder. İlk kontrollerin gösterdikleri: sıcaklığı toplama ekleyen `v1` ile 2 Kasım 2026'da 2-24 °C'de 81 il merkezinin 14'ü "yüksek" çıktı, bu yüzden `v2`'de sıcaklık çarpan oldu; `v2` o gün 67 düşük ve 14 orta verdi. 2021 hava verisiyle yapılan mantık kontrolü, Manavgat, Marmaris ve Milas/Bodrum yangın günlerini 73-81 (çok yüksek ya da aşırı), kış ve ilkbahar kontrol günlerini 10-19 (düşük) puanladı. Ama bu yalnızca yazı kıştan ayırıyor: Ankara'da sıradan bir Ağustos öğlesi de 68,5 aldı. Kurak mevsimde indeks sık sık çok yüksek olacak; seviyeler doyabilir ve eşiklerin göreli olması gerekebilir. Aşama 4, yüksek seviyelerin ne sıklıkla yangınla örtüştüğünü kontrol eder. Tam Kanada Yangın Hava İndeksi (FWI) sistemi, günlük hava verisi ve birkaç haftalık ısınma verisi istediği için bu doğrulamadan sonraya bırakıldı.
 - **Güncelleme:** Bölgeler komutu (`python -m kivilcim.risk`) ingest'ten sonra saatlik çalışır, API'den ayrıdır. Çalıştırma başına küme sayısı sınırlanır (geçici: 200).
@@ -357,7 +357,7 @@ Her yanıtta `data_as_of` alanı ve kısa bir `disclaimer` alanı bulunur (resmi
 - Her zaman `valid_date`, `computed_at` ve seviyenin arkasındaki etkenler gösterilir.
 - İfade "yangın tehlike seviyesi"dir, hiçbir zaman "yangın olasılığı" değildir. Aktif bir yangının çevresinde hava koşullarını anlatır; yangının nereye ve ne hızla yayılacağını anlatmaz (yayılım tahmini geri test yapılana kadar kapsam dışıdır).
 - Neleri kapsamadığı söylenir: bitki örtüsü ve yakıt tipi, arazi, kuraklık geçmişi, tutuşturucu kaynaklar. Hava modeli çözünürlüğü kabadır, yerel koşullar farklı olabilir.
-- Aktif yangın olmayan yerlerde haritada renkli bölge yoktur. Bu, bölgenin güvenli olduğu anlamına gelmez; herhangi bir konumu kontrol etmenin yolu nokta sorgusudur.
+- Aktif tespit olmayan yerlerde risk değeri ve renkli bölge gösterilmez. Bu, bölgenin güvenli olduğu anlamına gelmez; yalnızca anlatılacak bir tespit olmadığı anlamına gelir. Metin bunu söyler.
 - Güncelleme başarısız olursa son iyi değerler gösterilir ve eski olarak işaretlenir (yangın verisindeki gibi).
 - Open-Meteo arayüzde ve README'de anılır (CC BY 4.0).
 
@@ -437,7 +437,7 @@ Her yanıtta `data_as_of` alanı ve kısa bir `disclaimer` alanı bulunur (resmi
 
 - Hedef bölge: Türkiye tamamı. Ingest Türkiye bounding box'ı ile yapılır, poligon filtresi yoktur; sınırın hemen ötesindeki tespitler görünebilir (MVP için bilinen ve kabul edilen kusur). Kapsam büyürse sonradan `region` alanı eklenebilir.
 - Konum girişi: Backend API yalnızca enlem/boylam alır. İl/ilçe → koordinat eşlemesi arayüzde (Aşama 3) statik veriyle çözülür.
-- Risk indeksi: MVP'nin parçası. Kural tabanlı, yalnızca hava verisine dayanır. Sadece aktif yangın kümelerinin çevresinde (harita katmanı) ve sorgulanan konumlar için istek anında (önbellekli) hesaplanır. MVP'de ülke geneli grid ve makine öğrenmesi yok. Aşama 4 geri testine kadar deneysel olarak etiketlenir.
+- Risk indeksi: MVP'nin parçası. Kural tabanlı, yalnızca hava verisine dayanır. Yalnızca aktif tespitlerin çevresinde gösterilir (sayfa en yakın olanı sorar; kümelenmiş bölgeler sonra gelecek), tespiti olmayan bir yer için genel risk olarak asla gösterilmez. MVP'de ülke geneli grid ve makine öğrenmesi yok. Aşama 4 geri testine kadar deneysel olarak etiketlenir.
 - Open-Meteo: ücretsiz ticari olmayan koşullarla ve atıfla kullanılır; proje şimdilik ücretsiz ve reklamsız kalır.
 - Yer verisi: il/ilçe merkez noktaları OpenStreetMap'ten (ODbL 1.0) gelir, atıfla birlikte `data/` ve `static/ilceler.json` içinde tutulur. Kod MIT kalır; ODbL veri dosyaları ayrıdır. Bunlar yaklaşık merkezlerdir, resmi sınır değildir.
 - Lisans: MIT (bkz. `LICENSE`).
