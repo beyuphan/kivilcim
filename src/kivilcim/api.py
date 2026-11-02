@@ -28,7 +28,8 @@ from kivilcim.db import init_db, make_engine, make_session_factory
 from kivilcim.events import Event, find_events
 from kivilcim.fixed import cell_of, find_fixed_cells
 from kivilcim.geo import bounding_box, haversine_km
-from kivilcim.models import FireDetection, IngestRun, WeatherSnapshot
+from kivilcim.imagery import find_before_after
+from kivilcim.models import EventImagery, FireDetection, IngestRun, WeatherSnapshot
 from kivilcim.ratelimit import RateLimitMiddleware
 from kivilcim.risk import compute_risk
 from kivilcim.scheduler import IngestScheduler, make_ingest_job
@@ -221,6 +222,37 @@ class EventDetailResponse(BaseModel):
     disclaimer: str
 
 
+class ImageOut(BaseModel):
+    label: str  # "Öncesi" or "Sonrası"
+    date: date
+    source: str  # Sentinel-2, Landsat or VIIRS
+    resolution_m: int
+    quality: str  # clear, partly_cloudy, cloudy or partial
+    cloud: float  # the share of the measured tile that looks like cloud, 0 to 1
+    tile_url: str  # a map tile URL template with {z}, {y} and {x} left in
+    max_native_zoom: int
+
+
+class EventImageryResponse(BaseModel):
+    event_id: str
+    before: ImageOut | None
+    after: ImageOut | None
+    low_resolution: bool  # at least one side is the coarse 250 m daily image
+    attribution: str
+    note: str
+    disclaimer: str
+
+
+IMAGERY_NOTE = (
+    "The nearest clear satellite images before the first and after the last detection. They are from "
+    "the day shown, not from the moment of the fire; a burn scar can be faint, and cloud can hide it."
+)
+# A choice that found a clear image on both sides is final. Anything less is looked at again later,
+# because a new image may have been published since.
+IMAGERY_FINAL_SECONDS = 400 * 86400
+IMAGERY_RETRY_SECONDS = 6 * 3600
+IMAGERY_FAILED_SECONDS = 15 * 60
+
 MAX_EVENT_DETECTIONS = 5000
 
 
@@ -406,6 +438,7 @@ def create_app(
         RateLimitMiddleware,
         general_per_minute=settings.rate_limit_per_minute,
         weather_per_minute=settings.rate_limit_weather_per_minute,
+        imagery_per_minute=settings.rate_limit_imagery_per_minute,
         trust_proxy=settings.trust_proxy,
     )
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_list, allow_methods=["GET"], allow_headers=[])
@@ -758,6 +791,55 @@ def create_app(
                 for r in rows
             ],
             note=EVENTS_NOTE,
+            disclaimer=DISCLAIMER,
+        )
+
+    imagery_lock = threading.Lock()
+
+    @app.get("/events/{event_id}/imagery", response_model=EventImageryResponse)
+    def event_imagery(
+        event_id: str,
+        response: Response,
+        session: Session = Depends(get_session),
+    ) -> EventImageryResponse:
+        """The satellite images to compare for an event: the nearest clear one before it began and
+        after it ended. The search downloads tiles, so the choice is stored and reused."""
+        event = next((e for e in all_events(session) if e.id == event_id), None)
+        if event is None:
+            raise HTTPException(status_code=404, detail="Event not found.")
+
+        now = clock()
+
+        def stored() -> dict | None:
+            row = session.get(EventImagery, event_id)
+            if row and (now - row.computed_at).total_seconds() < row.ttl_seconds:
+                return json.loads(row.payload)
+            return None
+
+        payload = stored()
+        if payload is None:
+            with imagery_lock:  # one search at a time: it is heavy, and two would repeat each other
+                session.expire_all()
+                payload = stored()
+                if payload is None:
+                    payload = find_before_after(event.center_lat, event.center_lon, event.start, event.end, now.date())
+                    both_clear = all(payload[s] and payload[s]["quality"] == "clear" for s in ("before", "after"))
+                    nothing = payload["before"] is None and payload["after"] is None
+                    ttl = (
+                        IMAGERY_FINAL_SECONDS if both_clear and not payload["low_resolution"]
+                        else IMAGERY_FAILED_SECONDS if nothing
+                        else IMAGERY_RETRY_SECONDS
+                    )
+                    session.merge(EventImagery(event_id=event_id, computed_at=now, ttl_seconds=ttl, payload=json.dumps(payload)))
+                    session.commit()
+        response.headers["Cache-Control"] = "public, max-age=300"
+        return EventImageryResponse(
+            event_id=event_id,
+            before=payload["before"],
+            after=payload["after"],
+            low_resolution=payload["low_resolution"],
+            attribution=payload["attribution"],
+            note=IMAGERY_NOTE,
             disclaimer=DISCLAIMER,
         )
 

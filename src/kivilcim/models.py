@@ -73,6 +73,17 @@ class WeatherSnapshot(Base):
     precip_recent: Mapped[float] = mapped_column(Float)  # mm over the last 72 h
 
 
+class EventImagery(Base):
+    """The before and after satellite images chosen for an event, kept so the search is done once."""
+
+    __tablename__ = "event_imagery"
+
+    event_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    computed_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    ttl_seconds: Mapped[int] = mapped_column(Integer)  # how long the choice may be reused
+    payload: Mapped[str] = mapped_column(String)  # JSON
+
+
 class ApiUsage(Base):
     """Calls made to an external API per UTC day, to stay under its free quota."""
 

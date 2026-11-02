@@ -45,9 +45,11 @@ class RateLimiter:
 
 
 def bucket_for(path: str) -> str | None:
-    """'weather', 'general', or None when the path is exempt."""
+    """'weather', 'imagery', 'general', or None when the path is exempt."""
     if path in EXEMPT_PATHS or path.startswith(EXEMPT_PREFIXES):
         return None
+    if path.startswith("/events/") and path.endswith("/imagery"):
+        return "imagery"
     if any(path == p or path.startswith(p + "/") for p in WEATHER_PATHS):
         return "weather"
     return "general"
@@ -61,9 +63,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         weather_per_minute: int,
         trust_proxy: bool = False,
         limiter: RateLimiter | None = None,
+        imagery_per_minute: int | None = None,
     ) -> None:
         super().__init__(app)
-        self._limits = {"general": general_per_minute, "weather": weather_per_minute}
+        self._limits = {
+            "general": general_per_minute,
+            "weather": weather_per_minute,
+            "imagery": general_per_minute if imagery_per_minute is None else imagery_per_minute,
+        }
         self._trust_proxy = trust_proxy
         self._limiter = limiter or RateLimiter()
 
