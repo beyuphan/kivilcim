@@ -177,6 +177,7 @@ Every response includes a `data_as_of` field and a short `disclaimer` field (not
 - Risk zones layer with legend, level and the drivers behind it; "experimental" label; note that no zone does not mean safe
 - Open-Meteo attribution
 - Responsibility note and data time on every screen
+- Status: first slice done (map at `/`, click or device location, radius and time filters, detections and low-confidence ones drawn differently, data freshness banner, permanent disclaimer, Istanbul time). Still to do: province/district selection with verified coordinate data, risk layer, PWA install
 
 **Stage 4: Validation and analysis**
 - Backtesting on past fires (FIRMS archive + Sentinel-2)
@@ -396,6 +397,7 @@ Her yanıtta `data_as_of` alanı ve kısa bir `disclaimer` alanı bulunur (resmi
 - Lejandlı risk bölgeleri katmanı, seviye ve arkasındaki etkenler; "deneysel" etiketi; bölge yok demek güvenli demek değildir notu
 - Open-Meteo atfı
 - Sorumluluk notu ve veri zamanı her ekranda
+- Durum: ilk dilim tamam (`/` adresinde harita, tıklayarak ya da cihaz konumuyla seçim, yarıçap ve zaman filtreleri, normal ve düşük güvenli tespitlerin farklı çizimi, veri tazelik bandı, sabit sorumluluk notu, İstanbul saati). Kalanlar: doğrulanmış koordinat verisiyle il/ilçe seçimi, risk katmanı, PWA kurulumu
 
 **Aşama 4: Doğrulama ve analiz**
 - Geçmiş yangınlarla geri test (FIRMS arşivi + Sentinel-2)
