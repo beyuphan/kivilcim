@@ -10,13 +10,40 @@ Usage: python -m kivilcim.districts data/turkiye-ilce-sinirlari_tm36.csv src/kiv
 import csv
 import json
 import sys
+from functools import lru_cache
 from pathlib import Path
+
+from kivilcim.geo import haversine_km
 
 ATTRIBUTION = "© OpenStreetMap katkıcıları, ODbL 1.0"
 # Loose box around Turkey, used only to catch wrong columns or a wrong coordinate system.
 LAT_RANGE = (35.5, 42.5)
 LON_RANGE = (25.5, 45.5)
 EXPECTED_PROVINCES = 81
+
+
+STATIC_JSON = Path(__file__).parent / "static" / "ilceler.json"
+# A point farther than this from every district center is treated as outside Turkey. The
+# FIRMS box around Turkey also covers parts of Iraq, Syria, Iran, Georgia and Greece.
+INSIDE_TURKEY_KM = 30.0
+
+
+@lru_cache(maxsize=1)
+def _district_points() -> list[tuple[float, float, str, str]]:
+    data = json.loads(STATIC_JSON.read_text(encoding="utf-8"))
+    return [
+        (d["lat"], d["lon"], d["name"], p["name"])
+        for p in data["provinces"]
+        for d in p["districts"]
+    ]
+
+
+def nearest_place(lat: float, lon: float) -> tuple[str, str, float]:
+    """The closest district center: (district, province, distance in km). Approximate."""
+    distance, district, province = min(
+        (haversine_km(lat, lon, la, lo), name, prov) for la, lo, name, prov in _district_points()
+    )
+    return district, province, distance
 
 
 def _number(text: str) -> float:

@@ -3,8 +3,10 @@
 Run with `python -m kivilcim.ingest`. Meant to be called by an external scheduler.
 """
 
+import argparse
 import sys
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import date, datetime, timedelta, timezone
 
 import httpx
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -24,15 +26,22 @@ def _redact(text: str, secret: str) -> str:
     return text.replace(secret, "<KEY>") if secret else text
 
 
+MAX_DAY_RANGE = 5  # FIRMS rejects a larger window with HTTP 400
+
+
 def fetch_area_csv(
     client: httpx.Client,
     map_key: str,
     source: str,
     day_range: int,
     bbox: tuple[float, float, float, float] = TURKEY_BBOX,
+    start_date: date | None = None,
 ) -> str:
+    """Fetch detections for the last `day_range` days, or for `day_range` days from `start_date`."""
     area = ",".join(str(v) for v in bbox)
     url = f"{FIRMS_AREA_URL}/{map_key}/{source}/{area}/{day_range}"
+    if start_date:
+        url += f"/{start_date.isoformat()}"
     response = client.get(url)
     if response.status_code != 200:
         raise FirmsError(f"HTTP {response.status_code}")
@@ -105,6 +114,42 @@ def ingest_source(
         return run
 
 
+def backfill(
+    session_factory: sessionmaker[Session],
+    client: httpx.Client,
+    map_key: str,
+    source: str,
+    start: date,
+    end: date,
+    now: datetime | None = None,
+    on_window: Callable[[date, int, int, int, int], None] | None = None,
+) -> int:
+    """Load past detections for [start, end] in 5 day windows. Returns how many were new.
+
+    Backfills are not recorded in ingest_runs: that table tracks the live ingest and feeds
+    the freshness shown to users, which a one-off history load must not affect.
+    Use an archive product (such as VIIRS_SNPP_SP) for older dates; NRT products only keep
+    roughly the last three months.
+    """
+    if end < start:
+        raise ValueError("end is before start")
+    ingested_at = now or datetime.now(timezone.utc)
+    added = 0
+    day = start
+    while day <= end:
+        days = min(MAX_DAY_RANGE, (end - day).days + 1)
+        text = fetch_area_csv(client, map_key, source, days, start_date=day)
+        parsed = parse_csv(text, source, ingested_at=ingested_at)
+        with session_factory() as session:
+            new = store_detections(session, parsed.detections)
+            session.commit()
+        added += new
+        if on_window:
+            on_window(day, days, len(parsed.detections), new, len(parsed.skipped))
+        day += timedelta(days=days)
+    return added
+
+
 def run_ingest(
     session_factory: sessionmaker[Session],
     client: httpx.Client,
@@ -122,7 +167,19 @@ def run_ingest(
     ]
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Fetch FIRMS detections. With no options, runs the live ingest. "
+        "With --source, --from and --to, loads past detections (a backfill)."
+    )
+    parser.add_argument("--source", help="FIRMS product for a backfill, e.g. VIIRS_SNPP_SP or VIIRS_SNPP_NRT")
+    parser.add_argument("--from", dest="start", type=date.fromisoformat, help="first day, YYYY-MM-DD")
+    parser.add_argument("--to", dest="end", type=date.fromisoformat, help="last day, YYYY-MM-DD")
+    args = parser.parse_args(argv)
+    backfilling = (args.source, args.start, args.end)
+    if any(backfilling) and not all(backfilling):
+        parser.error("--source, --from and --to must be given together")
+
     settings = get_settings()
     if not settings.firms_map_key:
         print("FIRMS_MAP_KEY is not set. Put it in .env (see .env.example).", file=sys.stderr)
@@ -130,8 +187,25 @@ def main() -> int:
 
     engine = make_engine(settings.database_url)
     init_db(engine)
+    factory = make_session_factory(engine)
+
+    if args.source:
+        def report(day: date, days: int, fetched: int, new: int, skipped: int) -> None:
+            note = f", {skipped} malformed rows skipped" if skipped else ""
+            print(f"{args.source} {day} (+{days - 1} days): {fetched} fetched, {new} new{note}")
+
+        with httpx.Client(timeout=120) as client:
+            try:
+                total = backfill(factory, client, settings.firms_map_key, args.source, args.start, args.end,
+                                 on_window=report)
+            except (FirmsError, ValueError) as exc:
+                print(f"backfill stopped: {_redact(str(exc), settings.firms_map_key)}", file=sys.stderr)
+                return 1
+        print(f"done: {total} new detections")
+        return 0
+
     with httpx.Client(timeout=60) as client:
-        runs = run_ingest(make_session_factory(engine), client, settings)
+        runs = run_ingest(factory, client, settings)
 
     for run in runs:
         note = f" ({run.error})" if run.error else ""

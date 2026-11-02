@@ -5,7 +5,7 @@ Start with: uvicorn kivilcim.api:create_app --factory
 
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from kivilcim.config import Settings, get_settings
 from kivilcim.db import init_db, make_engine, make_session_factory
+from kivilcim.events import Event, find_events
 from kivilcim.geo import bounding_box, haversine_km
 from kivilcim.models import FireDetection, IngestRun, WeatherSnapshot
 from kivilcim.risk import compute_risk
@@ -134,6 +135,84 @@ class RiskResponse(BaseModel):
     weather: WeatherOut
     attribution: str
     disclaimer: str
+
+
+EVENTS_NOTE = (
+    "Events are satellite detections grouped automatically by strength, place and time. "
+    "They are not confirmed incidents, and some may be crop burning or other heat sources "
+    "rather than forest fires."
+)
+
+
+class EventOut(BaseModel):
+    id: str
+    start: date
+    end: date
+    peak_day: date
+    days: int
+    detections: int
+    total_frp_mw: float
+    max_frp_mw: float
+    center_lat: float
+    center_lon: float
+    bbox: list[float]  # min_lat, min_lon, max_lat, max_lon
+    district: str  # nearest district center, approximate
+    province: str
+    in_turkey: bool
+
+
+class EventsResponse(BaseModel):
+    count: int
+    events: list[EventOut]
+    note: str
+    disclaimer: str
+
+
+class EventDetection(BaseModel):
+    latitude: float
+    longitude: float
+    acquired_at: datetime
+    frp: float | None
+    confidence_level: str
+    source: str
+
+
+class EventDay(BaseModel):
+    date: date
+    detections: int
+    total_frp_mw: float
+
+
+class EventDetailResponse(BaseModel):
+    event: EventOut
+    window_start: date
+    window_end: date
+    days: list[EventDay]
+    detections: list[EventDetection]
+    note: str
+    disclaimer: str
+
+
+MAX_EVENT_DETECTIONS = 5000
+
+
+def event_out(event: Event) -> EventOut:
+    return EventOut(
+        id=event.id,
+        start=event.start,
+        end=event.end,
+        peak_day=event.peak_day,
+        days=event.days,
+        detections=event.detections,
+        total_frp_mw=event.total_frp,
+        max_frp_mw=event.max_frp,
+        center_lat=event.center_lat,
+        center_lon=event.center_lon,
+        bbox=[event.min_lat, event.min_lon, event.max_lat, event.max_lon],
+        district=event.district,
+        province=event.province,
+        in_turkey=event.in_turkey,
+    )
 
 
 RISK_NOTE = (
@@ -360,6 +439,81 @@ def create_app(
             ),
             weather=weather_out(snap, result.status),
             attribution=ATTRIBUTION,
+            disclaimer=DISCLAIMER,
+        )
+
+    def all_events(session: Session) -> list[Event]:
+        return find_events(session.scalars(select(FireDetection)).all())
+
+    @app.get("/events", response_model=EventsResponse)
+    def events(
+        turkey_only: bool = True,
+        since: date | None = None,
+        until: date | None = None,
+        limit: int = Query(default=50, ge=1, le=200),
+        session: Session = Depends(get_session),
+    ) -> EventsResponse:
+        found = [
+            e
+            for e in all_events(session)
+            if (e.in_turkey or not turkey_only)
+            and (since is None or e.end >= since)
+            and (until is None or e.start <= until)
+        ][:limit]
+        return EventsResponse(
+            count=len(found), events=[event_out(e) for e in found], note=EVENTS_NOTE, disclaimer=DISCLAIMER
+        )
+
+    @app.get("/events/{event_id}", response_model=EventDetailResponse)
+    def event_detail(
+        event_id: str,
+        days_before: int = Query(default=5, ge=0, le=30),
+        days_after: int = Query(default=10, ge=0, le=60),
+        padding_deg: float = Query(default=0.3, ge=0, le=2),
+        session: Session = Depends(get_session),
+    ) -> EventDetailResponse:
+        event = next((e for e in all_events(session) if e.id == event_id), None)
+        if event is None:
+            raise HTTPException(status_code=404, detail="Event not found.")
+
+        window_start = event.start - timedelta(days=days_before)
+        window_end = event.end + timedelta(days=days_after)
+        rows = session.scalars(
+            select(FireDetection)
+            .where(
+                FireDetection.latitude.between(event.min_lat - padding_deg, event.max_lat + padding_deg),
+                FireDetection.longitude.between(event.min_lon - padding_deg, event.max_lon + padding_deg),
+                FireDetection.acquired_at >= datetime.combine(window_start, datetime.min.time(), timezone.utc),
+                FireDetection.acquired_at
+                < datetime.combine(window_end + timedelta(days=1), datetime.min.time(), timezone.utc),
+            )
+            .order_by(FireDetection.acquired_at)
+            .limit(MAX_EVENT_DETECTIONS)
+        ).all()
+
+        per_day: dict[date, list[float]] = {}
+        for row in rows:
+            per_day.setdefault(row.acquired_at.date(), []).append(row.frp or 0.0)
+        return EventDetailResponse(
+            event=event_out(event),
+            window_start=window_start,
+            window_end=window_end,
+            days=[
+                EventDay(date=day, detections=len(values), total_frp_mw=round(sum(values), 1))
+                for day, values in sorted(per_day.items())
+            ],
+            detections=[
+                EventDetection(
+                    latitude=r.latitude,
+                    longitude=r.longitude,
+                    acquired_at=r.acquired_at,
+                    frp=r.frp,
+                    confidence_level=r.confidence_level,
+                    source=r.source,
+                )
+                for r in rows
+            ],
+            note=EVENTS_NOTE,
             disclaimer=DISCLAIMER,
         )
 

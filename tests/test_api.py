@@ -205,6 +205,111 @@ def test_quota_stops_new_calls_and_the_cache_keeps_serving(session_factory):
     assert route.call_count == 1
 
 
+# ---- /events ----------------------------------------------------------------
+
+
+def add_event_fire(session_factory, lat=39.9, lon=32.85, first_day=0, days=3, strong=150.0):
+    """A strong detection plus weak neighbors on each day, around Ankara by default."""
+    with session_factory() as s:
+        for n in range(first_day, first_day + days):
+            when = datetime(2026, 7, 1, 10, 0, tzinfo=UTC) + timedelta(days=n)
+            # Weak neighbors are offset so none shares the strong detection's coordinates.
+            points = [(lat, lon, strong)] + [
+                (lat + 0.03 * (i % 4 + 1), lon + 0.03 * (i // 4), 10.0) for i in range(8)
+            ]
+            for plat, plon, frp in points:
+                s.add(
+                    FireDetection(
+                        source="VIIRS_SNPP_SP", satellite="N", instrument="VIIRS", latitude=plat,
+                        longitude=plon, acquired_at=when, confidence_raw="n", confidence_level="nominal",
+                        brightness=330.0, frp=frp, ingested_at=NOW,
+                    )
+                )
+        s.commit()
+
+
+def test_events_lists_a_big_fire_with_its_place(client, session_factory):
+    add_event_fire(session_factory)
+    body = client.get("/events").json()
+
+    assert body["count"] == 1
+    event = body["events"][0]
+    assert event["start"] == "2026-07-01"
+    assert event["end"] == "2026-07-03"
+    assert event["province"] == "Ankara"
+    assert event["max_frp_mw"] == 150
+    assert event["detections"] == 27
+    assert event["in_turkey"] is True
+    assert len(event["bbox"]) == 4
+    assert "not confirmed incidents" in body["note"]
+    assert "112" in body["disclaimer"]
+
+
+def test_events_is_empty_without_big_fires(client, session_factory):
+    add_event_fire(session_factory, strong=40.0)  # strongest detection is below the seed threshold
+    assert client.get("/events").json() == {
+        "count": 0,
+        "events": [],
+        "note": client.get("/events").json()["note"],
+        "disclaimer": client.get("/events").json()["disclaimer"],
+    }
+
+
+def test_events_can_be_filtered_by_date_and_limited(client, session_factory):
+    add_event_fire(session_factory, first_day=0)
+    add_event_fire(session_factory, lat=37.0, lon=35.3, first_day=30)
+    assert client.get("/events").json()["count"] == 2
+    assert client.get("/events", params={"since": "2026-07-20"}).json()["count"] == 1
+    assert client.get("/events", params={"until": "2026-07-10"}).json()["count"] == 1
+    assert client.get("/events", params={"limit": 1}).json()["count"] == 1
+    assert client.get("/events", params={"limit": 0}).status_code == 422
+
+
+def test_events_hides_places_outside_turkey_unless_asked(client, session_factory):
+    add_event_fire(session_factory, lat=36.3, lon=43.6)  # northern Iraq
+    assert client.get("/events").json()["count"] == 0
+    assert client.get("/events", params={"turkey_only": "false"}).json()["count"] == 1
+
+
+def test_event_detail_has_days_before_and_after(client, session_factory):
+    add_event_fire(session_factory, first_day=5, days=3)
+    # Earlier and later detections nearby, and one far away that must be left out.
+    add_event_fire(session_factory, first_day=1, days=1, strong=40.0)
+    add_event_fire(session_factory, first_day=12, days=1, strong=40.0)
+    add_event_fire(session_factory, lat=37.0, lon=35.3, first_day=6, days=1, strong=40.0)
+
+    event_id = client.get("/events").json()["events"][0]["id"]
+    body = client.get(f"/events/{event_id}", params={"days_before": 5, "days_after": 5}).json()
+
+    assert body["event"]["id"] == event_id
+    assert body["window_start"] == "2026-07-01"
+    assert body["window_end"] == "2026-07-13"
+    dates = [d["date"] for d in body["days"]]
+    assert dates == ["2026-07-02", "2026-07-06", "2026-07-07", "2026-07-08", "2026-07-13"]
+    assert all(35 < d["latitude"] < 41 and d["longitude"] < 34 for d in body["detections"])
+    assert not any(d["latitude"] < 38 for d in body["detections"])  # the Adana detection is excluded
+    assert body["days"][1]["detections"] == 9
+
+
+def test_event_detail_window_can_be_narrowed(client, session_factory):
+    add_event_fire(session_factory, first_day=5, days=3)
+    add_event_fire(session_factory, first_day=1, days=1, strong=40.0)
+    event_id = client.get("/events").json()["events"][0]["id"]
+    body = client.get(f"/events/{event_id}", params={"days_before": 0, "days_after": 0}).json()
+    assert [d["date"] for d in body["days"]] == ["2026-07-06", "2026-07-07", "2026-07-08"]
+
+
+def test_unknown_event_is_404(client):
+    assert client.get("/events/20260101-1_1").status_code == 404
+
+
+@pytest.mark.parametrize("params", [{"days_before": -1}, {"days_before": 31}, {"days_after": 61}, {"padding_deg": 3}])
+def test_event_detail_validates_window_parameters(client, session_factory, params):
+    add_event_fire(session_factory)
+    event_id = client.get("/events").json()["events"][0]["id"]
+    assert client.get(f"/events/{event_id}", params=params).status_code == 422
+
+
 # ---- /fires -----------------------------------------------------------------
 
 
