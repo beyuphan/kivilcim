@@ -78,13 +78,14 @@ def parse_forecast(payload: dict) -> dict:
     }
 
 
-def fetch_weather(client: httpx.Client, lat: float, lon: float) -> dict:
+def _request(client: httpx.Client, points: list[tuple[float, float]]) -> list:
+    """One Open-Meteo request for one or more points. Returns one payload per point, in order."""
     try:
         response = client.get(
             OPEN_METEO_URL,
             params={
-                "latitude": lat,
-                "longitude": lon,
+                "latitude": ",".join(str(lat) for lat, _ in points),
+                "longitude": ",".join(str(lon) for _, lon in points),
                 "current": "temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m",
                 "hourly": "precipitation",
                 "past_days": 3,
@@ -101,19 +102,37 @@ def fetch_weather(client: httpx.Client, lat: float, lon: float) -> dict:
         payload = response.json()
     except ValueError as exc:
         raise WeatherUnavailable("Open-Meteo returned invalid JSON") from exc
-    return parse_forecast(payload)
+    # A single point comes back as an object, several points as a list.
+    items = payload if isinstance(payload, list) else [payload]
+    if len(items) != len(points):
+        raise WeatherUnavailable(f"Open-Meteo returned {len(items)} locations for {len(points)} points")
+    return items
 
+
+def fetch_weather(client: httpx.Client, lat: float, lon: float) -> dict:
+    return parse_forecast(_request(client, [(lat, lon)])[0])
+
+
+def fetch_weather_batch(client: httpx.Client, points: list[tuple[float, float]]) -> list[dict | None]:
+    """Weather for several points in one request. A point whose data is unusable gives None."""
+    results = []
+    for item in _request(client, points):
+        try:
+            results.append(parse_forecast(item))
+        except WeatherUnavailable:
+            results.append(None)
+    return results
 
 def calls_today(session: Session, now: datetime) -> int:
     row = session.get(ApiUsage, (now.strftime("%Y-%m-%d"), PROVIDER))
     return row.calls if row else 0
 
 
-def _count_call(session: Session, now: datetime) -> None:
-    statement = sqlite_insert(ApiUsage).values(day=now.strftime("%Y-%m-%d"), provider=PROVIDER, calls=1)
+def _count_calls(session: Session, now: datetime, amount: int = 1) -> None:
+    statement = sqlite_insert(ApiUsage).values(day=now.strftime("%Y-%m-%d"), provider=PROVIDER, calls=amount)
     session.execute(
         statement.on_conflict_do_update(
-            index_elements=["day", "provider"], set_={"calls": ApiUsage.calls + 1}
+            index_elements=["day", "provider"], set_={"calls": ApiUsage.calls + amount}
         )
     )
     session.commit()
@@ -145,7 +164,7 @@ def get_weather(
     if calls_today(session, now) >= daily_quota:
         failure = WeatherUnavailable("daily Open-Meteo call quota reached")
     else:
-        _count_call(session, now)
+        _count_calls(session, now)
         try:
             data = fetch_weather(client, rlat, rlon)
         except WeatherUnavailable as exc:
@@ -163,3 +182,69 @@ def get_weather(
     if cached:
         return WeatherResult(cached, "stale")
     raise failure
+
+
+BATCH_SIZE = 50  # points per Open-Meteo request; it accepts far more, but this keeps responses small
+
+
+def get_weather_many(
+    session: Session,
+    client: httpx.Client,
+    points: list[tuple[float, float]],
+    now: datetime,
+    cache_minutes: int,
+    daily_quota: int,
+) -> dict[tuple[float, float], WeatherResult | None]:
+    """Weather for several points with as few requests as possible.
+
+    Results are keyed by the rounded point. Fresh cache entries are reused, the missing ones are
+    fetched together (each counts against the daily quota like a single call), and anything that
+    could not be fetched falls back to an older cached value marked stale, or None when there is
+    none. Points are served in the order given, so put the most important first.
+    """
+    keys = list(dict.fromkeys((round_coordinate(lat), round_coordinate(lon)) for lat, lon in points))
+    cached = {(s.latitude, s.longitude): s for s in session.scalars(select(WeatherSnapshot)).all()}
+
+    results: dict[tuple[float, float], WeatherResult | None] = {}
+    missing = []
+    for key in keys:
+        snapshot = cached.get(key)
+        if snapshot and now - snapshot.fetched_at < timedelta(minutes=cache_minutes):
+            results[key] = WeatherResult(snapshot, "cached")
+        else:
+            missing.append(key)
+
+    allowed = max(0, daily_quota - calls_today(session, now))
+    to_fetch = missing[:allowed]
+    fetched: dict[tuple[float, float], WeatherSnapshot] = {}
+    for start in range(0, len(to_fetch), BATCH_SIZE):
+        chunk = to_fetch[start : start + BATCH_SIZE]
+        _count_calls(session, now, len(chunk))
+        try:
+            batch = fetch_weather_batch(client, chunk)
+        except WeatherUnavailable:
+            continue
+        for key, data in zip(chunk, batch):
+            if data is None:
+                continue
+            snapshot = cached.get(key)
+            if snapshot is None:
+                snapshot = WeatherSnapshot(latitude=key[0], longitude=key[1])
+                session.add(snapshot)
+                cached[key] = snapshot
+            snapshot.fetched_at = now
+            for name, value in data.items():
+                setattr(snapshot, name, value)
+            fetched[key] = snapshot
+        session.commit()
+
+    for key in keys:
+        if key in results:
+            continue
+        if key in fetched:
+            results[key] = WeatherResult(fetched[key], "fresh")
+        elif key in cached:
+            results[key] = WeatherResult(cached[key], "stale")
+        else:
+            results[key] = None
+    return results

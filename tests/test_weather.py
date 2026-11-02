@@ -9,6 +9,7 @@ from kivilcim.weather import (
     WeatherUnavailable,
     calls_today,
     get_weather,
+    get_weather_many,
     parse_forecast,
     round_coordinate,
 )
@@ -106,6 +107,109 @@ def test_parse_rejects_a_response_with_no_precipitation_in_the_window():
 def test_coordinates_round_to_a_tenth_of_a_degree():
     assert round_coordinate(39.93) == 39.9
     assert round_coordinate(39.96) == 40.0
+
+
+# ---- several points at once -------------------------------------------------
+
+
+def many(session, client, points, now=NOW, quota=100):
+    return get_weather_many(session, client, points, now, TTL, quota)
+
+
+def batch_payload(n, **current):
+    return [make_payload(**current) for _ in range(n)]
+
+
+@respx.mock
+def test_several_points_are_fetched_in_one_request_and_counted_per_point(session, client):
+    route = respx.route(**ROUTE).respond(200, json=batch_payload(3))
+    result = many(session, client, [(39.9, 32.9), (41.0, 29.0), (36.4, 36.2)])
+
+    assert route.call_count == 1
+    assert {r.status for r in result.values()} == {"fresh"}
+    assert set(result) == {(39.9, 32.9), (41.0, 29.0), (36.4, 36.2)}
+    assert calls_today(session, NOW) == 3
+    assert "latitude=39.9%2C41.0%2C36.4" in str(route.calls[0].request.url)
+
+
+@respx.mock
+def test_points_that_round_to_the_same_cell_are_fetched_once(session, client):
+    route = respx.route(**ROUTE).respond(200, json=batch_payload(1))
+    result = many(session, client, [(39.93, 32.88), (39.86, 32.94)])
+    assert list(result) == [(39.9, 32.9)]
+    assert calls_today(session, NOW) == 1
+    assert route.call_count == 1
+
+
+@respx.mock
+def test_cached_points_are_not_fetched_again(session, client):
+    route = respx.route(**ROUTE).respond(200, json=batch_payload(2))
+    many(session, client, [(39.9, 32.9), (41.0, 29.0)])
+    assert route.call_count == 1
+
+    route.respond(200, json=batch_payload(1))
+    result = many(session, client, [(39.9, 32.9), (36.4, 36.2)], now=NOW + timedelta(minutes=10))
+
+    assert result[(39.9, 32.9)].status == "cached"
+    assert result[(36.4, 36.2)].status == "fresh"
+    assert route.call_count == 2  # one more request, for the new point only
+    assert calls_today(session, NOW) == 3  # 2 + only the new point
+
+
+@respx.mock
+def test_a_quota_that_runs_out_serves_the_first_points_and_the_rest_from_cache(session, client):
+    route = respx.route(**ROUTE).respond(200, json=batch_payload(1))
+    many(session, client, [(36.4, 36.2)])  # cached earlier, and it used one call
+    assert route.call_count == 1
+
+    later = NOW + timedelta(hours=2)
+    result = many(session, client, [(39.9, 32.9), (41.0, 29.0), (36.4, 36.2)], now=later, quota=2)
+
+    # One call was already used, so only one more is allowed: the first missing point gets it.
+    # The old cached point is also due, but there is no quota left for it, so it is served stale.
+    assert result[(39.9, 32.9)].status == "fresh"
+    assert result[(41.0, 29.0)] is None
+    assert result[(36.4, 36.2)].status == "stale"
+    assert route.call_count == 2
+
+
+@respx.mock
+def test_an_upstream_failure_falls_back_to_stale_or_none(session, client):
+    respx.route(**ROUTE).respond(200, json=batch_payload(1))
+    many(session, client, [(36.4, 36.2)])
+
+    respx.route(**ROUTE).respond(500, text="boom")
+    result = many(session, client, [(36.4, 36.2), (39.9, 32.9)], now=NOW + timedelta(hours=2))
+    assert result[(36.4, 36.2)].status == "stale"
+    assert result[(39.9, 32.9)] is None
+
+
+@respx.mock
+def test_one_unusable_point_does_not_spoil_the_others(session, client):
+    payload = batch_payload(2)
+    payload[1]["current"]["temperature_2m"] = None
+    respx.route(**ROUTE).respond(200, json=payload)
+    result = many(session, client, [(39.9, 32.9), (41.0, 29.0)])
+    assert result[(39.9, 32.9)].status == "fresh"
+    assert result[(41.0, 29.0)] is None
+
+
+@respx.mock
+def test_a_response_with_the_wrong_number_of_locations_is_rejected(session, client):
+    respx.route(**ROUTE).respond(200, json=batch_payload(1))
+    result = many(session, client, [(39.9, 32.9), (41.0, 29.0)])
+    assert all(r is None for r in result.values())
+
+
+@respx.mock
+def test_large_requests_are_split_into_batches(session, client):
+    route = respx.route(**ROUTE).mock(
+        side_effect=lambda request: httpx.Response(200, json=batch_payload(len(request.url.params["latitude"].split(","))))
+    )
+    points = [(36.0 + 0.1 * i, 30.0) for i in range(120)]
+    result = many(session, client, points, quota=1000)
+    assert route.call_count == 3  # 50 + 50 + 20
+    assert len(result) == 120 and all(r.status == "fresh" for r in result.values())
 
 
 # ---- cache and quota --------------------------------------------------------

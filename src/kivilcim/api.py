@@ -25,7 +25,15 @@ from kivilcim.fixed import cell_of, find_fixed_cells
 from kivilcim.geo import bounding_box, haversine_km
 from kivilcim.models import FireDetection, IngestRun, WeatherSnapshot
 from kivilcim.risk import compute_risk
-from kivilcim.weather import ATTRIBUTION, CacheStatus, WeatherUnavailable, get_weather
+from kivilcim.weather import (
+    ATTRIBUTION,
+    CacheStatus,
+    WeatherUnavailable,
+    get_weather,
+    get_weather_many,
+    round_coordinate,
+)
+from kivilcim.zones import find_zones
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -220,6 +228,32 @@ def event_out(event: Event) -> EventOut:
         province=event.province,
         in_turkey=event.in_turkey,
     )
+
+
+class ZoneOut(BaseModel):
+    id: str
+    latitude: float
+    longitude: float
+    detections: int
+    total_frp_mw: float
+    max_frp_mw: float
+    latest_observation_at: datetime
+    age_minutes: float
+    bbox: list[float]  # min_lat, min_lon, max_lat, max_lon
+    radius_km: float  # for drawing
+    district: str  # nearest district center, approximate
+    province: str
+    risk: RiskOut | None  # None when the weather could not be obtained
+    weather: WeatherOut | None
+
+
+class ZonesResponse(BaseModel):
+    since_hours: int
+    count: int
+    zones: list[ZoneOut]
+    data_as_of: DataAsOf
+    attribution: str
+    disclaimer: str
 
 
 RISK_NOTE = (
@@ -431,6 +465,74 @@ def create_app(
         result = current_weather(session, lat, lon)
         return WeatherResponse(
             weather=weather_out(result.snapshot, result.status),
+            attribution=ATTRIBUTION,
+            disclaimer=DISCLAIMER,
+        )
+
+    @app.get("/risk/zones", response_model=ZonesResponse)
+    def risk_zones(
+        since_hours: int = Query(default=24, ge=1, le=72),
+        session: Session = Depends(get_session),
+    ) -> ZonesResponse:
+        """Active fire zones across Turkey, each with the weather index at its center.
+
+        Weather for all zones is fetched in one request (and cached), strongest zones first, so
+        if the daily call quota runs short it is the weakest zones that go without a value.
+        """
+        current = clock()
+        rows = session.scalars(
+            select(FireDetection).where(FireDetection.acquired_at >= current - timedelta(hours=since_hours))
+        ).all()
+        zones = find_zones(rows, fixed_cells(session))
+        weather_by_point = get_weather_many(
+            session,
+            weather_client,
+            [(z.center_lat, z.center_lon) for z in zones],
+            current,
+            settings.weather_cache_minutes,
+            settings.open_meteo_daily_quota,
+        )
+
+        out = []
+        for zone in zones:
+            result = weather_by_point.get((round_coordinate(zone.center_lat), round_coordinate(zone.center_lon)))
+            risk = weather = None
+            if result is not None:
+                snap = result.snapshot
+                scored = compute_risk(snap.temperature, snap.humidity, snap.wind_speed, snap.precip_recent)
+                weather = weather_out(snap, result.status)
+                risk = RiskOut(
+                    score=scored.score,
+                    level=scored.level,
+                    drivers=scored.drivers,
+                    contributions=scored.contributions,
+                    index_version=scored.index_version,
+                    experimental=True,
+                    note=RISK_NOTE,
+                )
+            out.append(
+                ZoneOut(
+                    id=zone.id,
+                    latitude=zone.center_lat,
+                    longitude=zone.center_lon,
+                    detections=zone.detections,
+                    total_frp_mw=zone.total_frp,
+                    max_frp_mw=zone.max_frp,
+                    latest_observation_at=zone.latest_observation,
+                    age_minutes=round((current - zone.latest_observation).total_seconds() / 60, 1),
+                    bbox=[zone.min_lat, zone.min_lon, zone.max_lat, zone.max_lon],
+                    radius_km=zone.radius_km,
+                    district=zone.district,
+                    province=zone.province,
+                    risk=risk,
+                    weather=weather,
+                )
+            )
+        return ZonesResponse(
+            since_hours=since_hours,
+            count=len(out),
+            zones=out,
+            data_as_of=data_as_of(session, current),
             attribution=ATTRIBUTION,
             disclaimer=DISCLAIMER,
         )

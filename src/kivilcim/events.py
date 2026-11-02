@@ -17,6 +17,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 
+from kivilcim.components import Components
 from kivilcim.districts import INSIDE_TURKEY_KM, nearest_place
 from kivilcim.fixed import MIN_HISTORY_DAYS, RECURRING_SHARE, cell_of, find_fixed_cells
 from kivilcim.geo import haversine_km
@@ -61,29 +62,6 @@ class Event:
     in_turkey: bool
 
 
-class _Components:
-    """Union-find over hashable nodes."""
-
-    def __init__(self) -> None:
-        self.parent: dict = {}
-
-    def add(self, node) -> None:
-        self.parent.setdefault(node, node)
-
-    def find(self, node):
-        root = node
-        while self.parent[root] != root:
-            root = self.parent[root]
-        while self.parent[node] != root:
-            self.parent[node], node = root, self.parent[node]
-        return root
-
-    def union(self, a, b) -> None:
-        ra, rb = self.find(a), self.find(b)
-        if ra != rb:
-            self.parent[rb] = ra
-
-
 def _node(d) -> tuple[int, int, int]:
     return (*cell_of(d.latitude, d.longitude), d.acquired_at.date().toordinal())
 
@@ -107,7 +85,7 @@ def find_events(
 
     # 1. Strong detections become seeds and are linked into groups.
     seed_nodes = {_node(d) for d in rows if (d.frp or 0.0) >= min_max_frp}
-    groups = _Components()
+    groups = Components()
     for node in seed_nodes:
         groups.add(node)
     for ci, cj, day in seed_nodes:

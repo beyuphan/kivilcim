@@ -220,6 +220,93 @@ def test_quota_stops_new_calls_and_the_cache_keeps_serving(session_factory):
     assert route.call_count == 1
 
 
+# ---- /risk/zones ------------------------------------------------------------
+
+
+def batch_response(request):
+    count = len(request.url.params["latitude"].split(","))
+    return httpx.Response(200, json=[open_meteo_payload() for _ in range(count)])
+
+
+def add_zone_fire(session_factory, lat, lon, hours_ago=2.0, frp=40.0, level="nominal"):
+    add_fire(session_factory, lat, lon, hours_ago=hours_ago, level=level)
+    with session_factory() as s:
+        row = s.query(FireDetection).order_by(FireDetection.id.desc()).first()
+        row.frp = frp
+        s.commit()
+
+
+@respx.mock
+def test_zones_come_with_the_weather_index_from_one_request(session_factory):
+    route = respx.route(**OPEN_METEO).mock(side_effect=batch_response)
+    add_zone_fire(session_factory, 39.9, 32.85, frp=30.0)  # Ankara
+    add_zone_fire(session_factory, 39.92, 32.88, frp=20.0)  # same zone
+    add_zone_fire(session_factory, 37.3, 35.5, frp=90.0)  # Adana
+    body = weather_client(session_factory).get("/risk/zones").json()
+
+    assert route.call_count == 1
+    assert body["count"] == 2
+    adana, ankara = body["zones"]  # strongest first
+    assert (adana["province"], ankara["province"]) == ("Adana", "Ankara")
+    assert ankara["detections"] == 2 and ankara["total_frp_mw"] == 50
+    assert ankara["risk"]["level"] == "extreme" and ankara["risk"]["experimental"] is True
+    assert ankara["weather"]["temperature_c"] == 33.5
+    assert ankara["age_minutes"] == 120
+    assert ankara["radius_km"] >= 2
+    assert "Open-Meteo" in body["attribution"]
+    assert "112" in body["disclaimer"]
+
+
+@respx.mock
+def test_zones_leave_out_old_low_confidence_and_recurring_detections(session_factory):
+    respx.route(**OPEN_METEO).mock(side_effect=batch_response)
+    add_zone_fire(session_factory, 39.9, 32.85, hours_ago=30)  # older than the default 24 hours
+    add_zone_fire(session_factory, 37.3, 35.5, level="low")
+    add_daily_history(session_factory, 36.70, 36.20)
+    add_zone_fire(session_factory, 36.71, 36.21, hours_ago=1)  # in an always-on cell
+    add_zone_fire(session_factory, 40.5, 33.0)  # the only one that counts
+    body = weather_client(session_factory).get("/risk/zones").json()
+    assert [z["province"] for z in body["zones"]] == ["Çankırı"]
+    longer = weather_client(session_factory).get("/risk/zones", params={"since_hours": 72}).json()
+    assert longer["count"] == 2
+
+
+@respx.mock
+def test_zones_still_appear_when_the_weather_is_unavailable(session_factory):
+    respx.route(**OPEN_METEO).respond(500, text="boom")
+    add_zone_fire(session_factory, 39.9, 32.85)
+    body = weather_client(session_factory).get("/risk/zones").json()
+
+    assert body["count"] == 1
+    assert body["zones"][0]["risk"] is None and body["zones"][0]["weather"] is None
+    assert "boom" not in str(body)
+
+
+@respx.mock
+def test_zones_respect_the_daily_call_quota(session_factory):
+    route = respx.route(**OPEN_METEO).mock(side_effect=batch_response)
+    add_zone_fire(session_factory, 39.9, 32.85, frp=10.0)  # weaker, so it goes last
+    add_zone_fire(session_factory, 37.3, 35.5, frp=90.0)
+    client = weather_client(session_factory, open_meteo_daily_quota=1)
+    body = client.get("/risk/zones").json()
+
+    assert route.call_count == 1
+    by_province = {z["province"]: z for z in body["zones"]}
+    assert by_province["Adana"]["risk"] is not None  # the strongest got the only call
+    assert by_province["Ankara"]["risk"] is None
+
+
+def test_zones_with_no_recent_detections_is_an_empty_list(session_factory):
+    body = weather_client(session_factory).get("/risk/zones").json()
+    assert body["zones"] == [] and body["count"] == 0
+    assert body["data_as_of"]["freshness"] == "unknown"
+
+
+@pytest.mark.parametrize("hours", [0, 73])
+def test_zones_validate_the_time_window(session_factory, hours):
+    assert weather_client(session_factory).get("/risk/zones", params={"since_hours": hours}).status_code == 422
+
+
 # ---- /events ----------------------------------------------------------------
 
 
