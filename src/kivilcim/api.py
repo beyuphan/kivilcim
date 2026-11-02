@@ -255,7 +255,7 @@ IMAGERY_NOTE = (
 IMAGERY_FINAL_SECONDS = 400 * 86400
 IMAGERY_RETRY_SECONDS = 6 * 3600
 IMAGERY_WAITING_SECONDS = 3 * 3600
-IMAGERY_VERSION = 2  # stored choices of an older version are looked for again
+IMAGERY_VERSION = 3  # stored choices of an older version are looked for again
 IMAGERY_FAILED_SECONDS = 15 * 60
 
 MAX_EVENT_DETECTIONS = 5000

@@ -25,15 +25,15 @@ ATTRIBUTION = "Imagery: NASA GIBS / ESDIS (Harmonized Landsat Sentinel-2, VIIRS,
 WMTS = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/{layer}/default/{date}/GoogleMapsCompatible_Level{level}/{{z}}/{{y}}/{{x}}.{ext}"
 WMS = "https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi"
 
-SEARCH_DAYS_BEFORE = 21
-SEARCH_DAYS_AFTER = 28
+SEARCH_DAYS_BEFORE = 30
+SEARCH_DAYS_AFTER = 45
 MIN_GAP_AFTER = 3  # the "after" image is at least this many days after the last fire activity: a fire
 # that has just gone out still smokes, and a burn scar shows more clearly once the smoke has gone
 LATENCY_DAYS = 2  # GIBS publishes a day or two late
 PROBE_ZOOM = 10  # one tile of about 39 km at the equator; enough to judge a place
 MIN_VALID = 0.85  # share of the tile that holds data
-CLEAR_CLOUD = 0.10  # at most this much cloud counts as a clear image
-USABLE_CLOUD = 0.35  # above this an image is too cloudy to use as a first choice
+CLEAR_CLOUD = 0.03  # at most this much cloud counts as a clear image
+USABLE_CLOUD = 0.10  # above this an image is too cloudy to show at all
 WORKERS = 8
 OPTIONS_PER_SIDE = 5  # other usable days offered next to the chosen one
 RETRIES = 2
@@ -264,26 +264,26 @@ def probe_viirs(client: httpx.Client, day: date, lat: float, lon: float) -> Cand
 
 
 def choose(candidates: list[Candidate], nearest_to: date) -> Candidate | None:
-    """The best candidate: the nearest in time among the usable ones, else the clearest.
+    """The best candidate, or None when nothing is clear enough to show.
 
-    Usable means a full tile with at most USABLE_CLOUD cloud. Among those, a clear image is
-    preferred over a partly cloudy one unless the clear one is more than 8 days farther away.
+    Usable means a full tile with at most USABLE_CLOUD cloud. Cloud is never shown as a fallback:
+    people take cloud for smoke and a cloudy picture says nothing about the ground. Among usable
+    images the nearest in time wins, but a clear one is preferred over a slightly cloudy one unless
+    the clear one is more than 14 days farther away.
     """
-    full = [c for c in candidates if c.valid >= MIN_VALID]
-    if not full:
+    usable = [c for c in candidates if c.valid >= MIN_VALID and c.cloud <= USABLE_CLOUD]
+    if not usable:
         return None
-    usable = [c for c in full if c.cloud <= USABLE_CLOUD]
-    if usable:
-        def distance(c: Candidate) -> int:
-            return abs((c.day - nearest_to).days)
 
-        clear = [c for c in usable if c.quality == "clear"]
-        best_clear = min(clear, key=distance) if clear else None
-        best_any = min(usable, key=distance)
-        if best_clear and distance(best_clear) <= distance(best_any) + 8:
-            return best_clear
-        return best_any
-    return max(full, key=lambda c: (c.score, -abs((c.day - nearest_to).days)))
+    def distance(c: Candidate) -> int:
+        return abs((c.day - nearest_to).days)
+
+    clear = [c for c in usable if c.quality == "clear"]
+    best_clear = min(clear, key=distance) if clear else None
+    best_any = min(usable, key=distance)
+    if best_clear and distance(best_clear) <= distance(best_any) + 14:
+        return best_clear
+    return best_any
 
 
 # ---- one event --------------------------------------------------------------

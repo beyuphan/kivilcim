@@ -3,6 +3,14 @@
 All notable changes. The format follows [Keep a Changelog](https://keepachangelog.com/) and the
 project uses [semantic versioning](https://semver.org/).
 
+## [0.2.2] - 2026-11-03
+
+### Fixed
+- **Cloudy images are never shown.** Cloud was being mistaken for smoke. Images with more than 10 % cloud
+  over the fire are now left out (before, up to 35 % was shown as "az bulutlu"), a clear image (under 3 %)
+  is preferred even when it is up to 14 days farther away, and the search reaches 30 days before and 45
+  days after. If no clear image exists a side is left empty instead of showing cloud.
+
 ## [0.2.1] - 2026-11-03
 
 ### Changed

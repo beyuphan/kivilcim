@@ -230,8 +230,8 @@ def cand(offset, valid=1.0, cloud=0.0, layer=HLS_S30):
 
 def test_quality_labels():
     assert cand(0).quality == "clear"
-    assert cand(0, cloud=0.2).quality == "partly_cloudy"
-    assert cand(0, cloud=0.5).quality == "cloudy"
+    assert cand(0, cloud=0.08).quality == "partly_cloudy"
+    assert cand(0, cloud=0.2).quality == "cloudy"
     assert cand(0, valid=0.5).quality == "partial"
 
 
@@ -240,18 +240,18 @@ def test_the_nearest_clear_image_wins():
 
 
 def test_a_clear_image_beats_a_slightly_nearer_cloudy_one_but_not_a_much_nearer_one():
-    near_cloudy, clear_2_later, clear_far = cand(-1, cloud=0.25), cand(-4), cand(-20)
-    assert choose([near_cloudy, clear_2_later], EVENT) == clear_2_later  # 3 days farther is fine
-    assert choose([near_cloudy, clear_far], EVENT) == near_cloudy  # 19 days farther is not
+    near_hazy, clear_2_later, clear_far = cand(-1, cloud=0.08), cand(-4), cand(-20)
+    assert choose([near_hazy, clear_2_later], EVENT) == clear_2_later  # 3 days farther is fine
+    assert choose([near_hazy, clear_far], EVENT) == near_hazy  # 19 days farther is not
 
 
 def test_partial_tiles_are_not_used_when_a_full_one_exists():
     assert choose([cand(-1, valid=0.4), cand(-6)], EVENT).day == EVENT - timedelta(days=6)
 
 
-def test_with_only_cloudy_images_the_clearest_is_returned():
-    best = choose([cand(-1, cloud=0.6), cand(-3, cloud=0.45), cand(-2, cloud=0.9)], EVENT)
-    assert best.cloud == 0.45
+def test_cloudy_images_are_never_returned():
+    # People take cloud for smoke, so a cloudy picture is worse than none.
+    assert choose([cand(-1, cloud=0.6), cand(-3, cloud=0.24), cand(-2, cloud=0.9)], EVENT) is None
 
 
 def test_nothing_usable_gives_none():
@@ -451,11 +451,18 @@ def test_the_after_search_stops_at_the_latest_published_day():
 
 
 @respx.mock
-def test_a_cloudy_image_is_used_only_when_nothing_clearer_exists():
-    respx.route(**GIBS).mock(side_effect=archive(cloudy_days={"2026-09-06"}, clear_days={"2026-09-13"}, viirs_days=set()))
+def test_a_cloudy_day_is_skipped_for_a_clear_one_farther_away():
+    respx.route(**GIBS).mock(side_effect=archive(cloudy_days={"2026-09-06", "2026-09-12"}, clear_days={"2026-08-30", "2026-09-20"}, viirs_days=set()))
     result = find()
-    assert result["before"]["quality"] == "cloudy" and result["before"]["source"] in ("Sentinel-2", "Landsat")
-    assert result["after"]["quality"] == "clear"
+    assert result["before"]["date"] == "2026-08-30" and result["before"]["quality"] == "clear"
+    assert result["after"]["date"] == "2026-09-20"
+
+
+@respx.mock
+def test_when_every_image_is_cloudy_that_side_is_left_empty():
+    respx.route(**GIBS).mock(side_effect=archive(cloudy_days={f"2026-09-{d:02d}" for d in range(1, 30)}, viirs_days=set()))
+    result = find()
+    assert result["before"] is None and result["after"] is None
 
 
 @respx.mock

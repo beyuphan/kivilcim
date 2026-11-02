@@ -52,7 +52,7 @@ function fillThumbs(box, event, signal) {
   const put = (figure, image, label) => {
     clear(figure);
     if (!image) {
-      figure.append(el("div", { class: "thumb-missing" }, limited ? "Görüntü için açın" : "Uygun görüntü bulunamadı"));
+      figure.append(el("div", { class: "thumb-missing" }, limited ? "Görüntü için açın" : "Bulutsuz görüntü yok"));
       return;
     }
     const z = Math.min(event.extent_km > 30 ? 10 : 11, image.max_native_zoom);

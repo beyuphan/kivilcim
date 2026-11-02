@@ -118,7 +118,7 @@ export function mount(ctx, params) {
     }
     if (!before && !after) {
       imageryBox.append(el("p", { class: "card-title" }, "Bu yangın için kullanılabilir uydu görüntüsü bulunamadı"),
-        el("p", { class: "card-sub", style: { marginTop: "6px" } }, "Bu tarihlerde bulutsuz ya da yayımlanmış görüntü yok. Yangın çok yeniyse birkaç gün sonra yeniden bakın."));
+        el("p", { class: "card-sub", style: { marginTop: "6px" } }, "Bu tarihlerde bulutsuz görüntü yok; bulutlu görüntüleri duman sanılmasın diye göstermiyoruz. Birkaç gün sonra yeniden bakın."));
       return;
     }
     imageryBox.append(
@@ -157,7 +157,7 @@ export function mount(ctx, params) {
   }
 
   function side(image, label) {
-    if (!image) return el("div", { class: "compare-card" }, el("b", {}, label), el("span", {}, "Uygun görüntü bulunamadı"));
+    if (!image) return el("div", { class: "compare-card" }, el("b", {}, label), el("span", {}, "Bulutsuz görüntü bulunamadı"));
     return el("div", { class: "compare-card" }, el("b", {}, `${label} · ${fmt.shortDay(image.date)}`), el("span", {}, describe(image)),
       el("span", { class: "pill pill-plain tag", dataset: { level: image.quality === "clear" ? "low" : image.quality === "cloudy" ? "high" : "moderate" } }, QUALITY_TAG[image.quality] || image.quality));
   }
