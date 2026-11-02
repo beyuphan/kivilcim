@@ -3,6 +3,36 @@
 All notable changes. The format follows [Keep a Changelog](https://keepachangelog.com/) and the
 project uses [semantic versioning](https://semver.org/).
 
+## [0.9.0] - 2026-11-03
+
+### Changed
+- **A new look.** The page is one night-time scene: the map fills the screen, the top bar and the panel float
+  over it as glass, and heat is the one warm color. A hero at the top of the panel says how many zones are
+  active and counts up; the zone list shows each zone's heat; the map legend is a heat ramp.
+- **The map's satellite picture is cloud-free.** The default base is the Sentinel-2 cloudless mosaic (EOX);
+  the street map and yesterday's real picture (with its clouds, to tell cloud from smoke) are one tap away.
+  The choice is remembered.
+- **Pins you can click.** Zones, past fires and the detections of a place are now real pins: they glow, pulse,
+  can be reached with the keyboard and open a card with the details and a way in. Heat color and size tell how
+  strong a zone is; the number is how many detections it has. Hovering a row or a card lights its pin.
+- **Loading is visible.** Switching the base or the images of a fire shows a loading message with a spinner and
+  a moving bar, keeps the old picture until the new one is ready, and fades the new one in.
+- The date line of a before/after comparison starts in the middle of the part of the map you can see.
+
+### Added
+- **Fires of earlier years.** The past-fires page now covers 2016 to today. `scripts/backfill_history.py` loads
+  years of VIIRS detections from FIRMS (paced for its 5,000 transactions per 10 minutes), events older than 120
+  days are found once per year and stored in a `fire_events` table (`kivilcim.history`), and the thresholds follow
+  the number of satellites that flew (Suomi NPP from 2012, NOAA-20 from April 2018, NOAA-21 from January 2023).
+  `scripts/build_history.py` builds the table; the site tops it up after each ingest.
+- A bar chart of the years on the past-fires page (a bar per year, as tall as the heat of its fires; tap to filter),
+  a newest/biggest sort, and the biggest fires of all years on the home page. `GET /events` takes `sort=largest` and
+  up to 500 results.
+
+### Fixed
+- Fixed-source detection reads the last year of detections instead of all of them, so it stays fast as the
+  database grows; SQLite waits up to a minute for another writer.
+
 ## [0.8.0] - 2026-11-03
 
 ### Added

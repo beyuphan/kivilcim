@@ -11,7 +11,13 @@ export function describe(image) {
 }
 
 export function createCompare(map, mapwrap, imagery, { onReady = () => {} } = {}) {
+  // The line starts in the middle of the part of the map that is not under the panel.
   let ratio = 0.5;
+  const panel = document.getElementById("panel");
+  if (panel && matchMedia("(min-width: 900px)").matches) {
+    const left = panel.getBoundingClientRect().right + 16;
+    ratio = Math.min(0.9, (left + (mapwrap.clientWidth - left) / 2) / mapwrap.clientWidth);
+  }
   let pending = 0;
 
   const layerFor = (image) => L.tileLayer(image.tile_url, {
@@ -27,7 +33,7 @@ export function createCompare(map, mapwrap, imagery, { onReady = () => {} } = {}
   let before = imagery.before ? layerFor(imagery.before) : null;
   let after = imagery.after ? layerFor(imagery.after) : null;
 
-  const wait = el("div", { class: "compare-wait", role: "status" }, "Uydu görüntüleri yükleniyor…");
+  const wait = el("div", { class: "compare-wait", role: "status" }, el("span", { class: "spinner", "aria-hidden": "true" }), "Uydu görüntüleri yükleniyor…");
   const handle = el("button", {
     class: "compare-handle", type: "button", role: "slider", "aria-label": "Öncesi ve sonrası görüntü ayırıcı",
     "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": "50", "aria-orientation": "horizontal",

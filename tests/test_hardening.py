@@ -361,3 +361,18 @@ def test_every_module_the_app_imports_exists(session_factory):
         for name in re.findall(r'from "\./([\w-]+\.js)"', file.read_text(encoding="utf-8")):
             assert (js / name).is_file(), f"{file.name} imports {name}"
             assert client.get(f"/static/js/{name}").status_code == 200
+
+
+def test_the_csp_lets_pages_load_the_cloudless_satellite_tiles_and_nothing_else_new(session_factory):
+    csp = make_client(session_factory).get("/").headers["content-security-policy"]
+    img = next(part for part in csp.split("; ") if part.startswith("img-src"))
+    assert "https://tiles.maps.eox.at" in img and "https://gibs.earthdata.nasa.gov" in img
+    assert "script-src 'self'" in csp and "connect-src 'self'" in csp
+
+
+def test_every_page_loads_the_night_look_after_the_structure(session_factory):
+    client = make_client(session_factory)
+    for path in ("/", "/methodology", "/report", "/embed"):
+        html = client.get(path).text
+        assert html.index("/static/css/app.css") < html.index("/static/css/night.css"), path
+    assert client.get("/static/css/night.css").status_code == 200

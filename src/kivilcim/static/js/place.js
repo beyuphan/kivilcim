@@ -2,7 +2,7 @@
 
 import { api } from "./api.js";
 import { el, clear, icon, fmt, agoFrom, ago, levelPill, FACTORS, CONFIDENCE, satellite, COMPASS, announce } from "./ui.js";
-import { flyTo, getCanvas, levelColor } from "./map.js";
+import { flyTo, getCanvas, levelColor, pin, heatColor } from "./map.js";
 import { loadIndex, nearestName } from "./search.js";
 import * as saved from "./saved.js";
 import { windRelation, describe, compassName, fromName } from "./wind.js";
@@ -224,13 +224,24 @@ export function mount(ctx, params) {
     }
   }
 
+  // Each detection is a pin that can be clicked: when it was seen, by which satellite, how sure, how strong.
   function drawFires(fires) {
-    const add = (f, color, hollow) => L.circleMarker([f.latitude, f.longitude], {
-      renderer: getCanvas(), radius: 7, weight: 2, color: hollow ? color : "#fff", fillColor: color, fillOpacity: hollow ? 0 : 0.9,
-    }).bindTooltip(`${fmt.dec(f.distance_km)} km · ${agoFrom(f.acquired_at)}`, { className: "marker-label" }).addTo(layer);
-    fires.fires.forEach((f) => add(f, levelColor("very_high"), false));
-    fires.low_confidence.forEach((f) => add(f, levelColor("unknown"), true));
-    fires.recurring_sources.forEach((f) => add(f, levelColor("unknown"), true));
+    const add = (f, kind) => {
+      const color = kind === "fire" ? heatColor(f.frp ?? 10) : "#9aa3b2";
+      const label = kind === "fixed" ? "Sürekli sıcak kaynak (tesis olabilir)" : kind === "low" ? "Düşük güven, yangın olmayabilir" : CONFIDENCE[f.confidence_level] || f.confidence_level;
+      const marker = pin([f.latitude, f.longitude], {
+        color, size: kind === "fire" ? 26 : 22, pulse: kind === "fire",
+        title: `Uydu tespiti, ${fmt.dec(f.distance_km)} km`,
+        content: el("div", { class: "pop" },
+          el("b", {}, `${fmt.dec(f.distance_km)} km uzakta`),
+          el("span", { class: "pop-meta" }, `${agoFrom(f.acquired_at)} · ${satellite(f)}`),
+          el("span", { class: "pop-meta" }, `${label}${f.frp != null ? ` · ${fmt.dec(f.frp)} MW` : ""}`)),
+      });
+      marker.addTo(layer);
+    };
+    fires.fires.forEach((f) => add(f, "fire"));
+    fires.low_confidence.forEach((f) => add(f, "low"));
+    fires.recurring_sources.forEach((f) => add(f, "fixed"));
   }
 }
 

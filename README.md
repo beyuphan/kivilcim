@@ -13,6 +13,14 @@ code are in English, and [PLAN.md](PLAN.md) is bilingual.
 
 ![The map: active detection zones across Turkey, coloured by the weather index](docs/screenshots/home.png)
 
+## The look
+
+Night-time: the map fills the screen and the top bar and the panel float over it as glass. The base is a
+**cloud-free** Sentinel-2 mosaic (switch to the street map, or to yesterday's real picture with its clouds, to
+tell cloud from smoke). Each active zone is a glowing pin whose color is the heat the satellite measured and whose
+number is how many detections it has; pins are real elements, so they can be clicked or reached with the keyboard.
+Switching the base shows a loading message while the new picture arrives and fades it in.
+
 ## Who it is for, and why use it
 
 NASA's own FIRMS site shows the same detections, but as raw dots with English terms, and the forest
@@ -67,6 +75,10 @@ It is **not** an alarm: data arrives hours late and some fires never show. It do
   and when a satellite last observed the area. Hours between satellite passes are normal.
 - **Weaker evidence is shown, not hidden.** Low-confidence detections and places that detect almost every
   day (probably a factory, refinery, flare or landfill) are drawn as hollow rings and listed apart.
+- **Years of past fires.** The archive reaches back to 2016: the page lists the fires of every year with a bar
+  chart to pick a year, sorted newest or biggest first, and every pin on the map opens a card. Old events are
+  found once and stored (`scripts/backfill_history.py` loads the detections, `scripts/build_history.py` finds the
+  events; the running site keeps the table up to date).
 - **Past fires** (`/history`). The big fires found in the satellite archive, each with the satellite
   image **before and after** it on one map (drag the line), and a day-by-day map of how the detections
   spread. Images come from NASA GIBS: 30 m Sentinel-2 and Landsat when a clear day exists, the 250 m daily
@@ -229,6 +241,7 @@ site shows it.
 - Map and district/province center points: © [OpenStreetMap](https://www.openstreetmap.org/copyright)
   contributors, ODbL 1.0 (the data files are in `data/`, with their own notice, apart from the MIT code).
 - Map library: Leaflet (BSD-2).
+- Satellite base map: Sentinel-2 cloudless by EOX IT Services GmbH (s2maps.eu), contains modified Copernicus Sentinel data 2024, CC BY-NC-SA 4.0 (non-commercial use).
 
 ## Development
 

@@ -10,7 +10,7 @@
 /* ---- tokens ---------------------------------------------------------------------------- */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
 
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --fs-xs: 0.75rem;     /* 12 */
@@ -57,7 +57,7 @@
   --ease: cubic-bezier(0.2, 0, 0, 1);
 }
 
-@media (prefers-color-scheme: dark) {
+@media all {
   :root {
     --bg: #12151A;
     --surface: #1B1F26;
@@ -366,7 +366,7 @@ img, svg { display: block; max-width: 100%; }
 .thumb img { width: 100%; height: 100%; object-fit: cover; outline: 1px solid rgb(0 0 0 / 0.1); outline-offset: -1px; }
 .thumb figcaption { position: absolute; inset-block-end: var(--s-1); inset-inline-start: var(--s-1); padding: 2px var(--s-2); border-radius: var(--r-pill); background: rgb(15 18 24 / 0.72); color: #fff; font-size: var(--fs-xs); font-weight: 650; }
 .thumb-missing { display: grid; place-items: center; height: 100%; color: var(--text-3); font-size: var(--fs-xs); padding: var(--s-2); text-align: center; }
-@media (prefers-color-scheme: dark) { .thumb img { outline-color: rgb(255 255 255 / 0.1); } }
+@media all { .thumb img { outline-color: rgb(255 255 255 / 0.1); } }
 
 /* ---- skeleton and empty ----------------------------------------------------------------- */
 

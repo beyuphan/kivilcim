@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#F7F6F3" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#12151A" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#0D1015">
 <title>Yöntem ve sınırlar · Kıvılcım</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32.png">
 <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
 <link rel="stylesheet" href="/static/css/app.css?v=__VERSION__">
+<link rel="stylesheet" href="/static/css/night.css?v=__VERSION__">
 <script src="/static/pwa.js" defer></script>
 <script type="module" src="/static/js/methodology.js?v=__VERSION__"></script>
 </head>
@@ -105,12 +105,16 @@ bu bölümün görevidir.</p>
 <p>Bir yerin yakınında tespit varsa, sayfa en yakın tespitin yönünü (yerden tespite pusula yönü) hava servisinin verdiği rüzgar yönüyle karşılaştırır. Rüzgar tespit tarafından yere doğru esiyorsa (aradaki açı 45° ya da daha az) "size doğru", 100° ya da daha azsa "yan yönde", daha fazlaysa "uzağa" denir; rüzgar 8 km/sa'ten zayıfsa yön söylenmez. Aynı kontrol yangına 25 km içindeki ilçe merkezleri için de yapılır (köyler yok).</p>
 <p><strong>Bu bir yayılma tahmini değildir.</strong> Yalnızca şu anki ölçümü, bir ya da birkaç noktada, düz çizgi olarak karşılaştırır. Rüzgar saatler içinde değişir; arazi eğimi, bitki örtüsü ve müdahale yayılmayı çok daha fazla etkiler. Uydu tespiti saatler geç gelir, yangın o arada başka yere ilerlemiş olabilir. Bu yüzden sonuç bir uyarı değil, dikkat çekme amaçlıdır; tehlikede olduğunuzu düşünüyorsanız 112'yi arayın.</p>
 
+<h2>Haritanın uydu katmanı</h2>
+<p>Ana haritanın varsayılan zemini <strong>bulutsuz uydu görüntüsüdür</strong>: Sentinel-2 uydusunun bir yıl boyunca çektiği görüntülerin, bulutlu kısımlar atılarak birleştirildiği bir mozaik (EOX, "Sentinel-2 cloudless", 2024). Bu görüntü yaklaşık bir yıl önceki zemini gösterir, güncel durumu değil; bu yüzden üzerindeki pinler dışında yangın göstermez. Ticari olmayan kullanım için CC BY-NC-SA 4.0 lisanslıdır; bu site reklamsız ve ücretsizdir. Kaynak: Contains modified Copernicus Sentinel data 2024, EOX IT Services GmbH (s2maps.eu).</p>
+<p>"Harita" düğmesi sokak haritasını (OpenStreetMap), "Dünkü" düğmesi ise dünün gerçek günlük uydu görüntüsünü (NASA GIBS, 250 m) gösterir. Dünkü görüntüde bulut vardır: kalın beyaz olan bulut, ince gri-kahverengi şerit duman olabilir; bu seçenek bunu kendiniz ayırt edebilmeniz içindir.</p>
+
 <h2>Geçmiş yangınlar sayfası</h2>
 <p><a href="/history">Geçmiş yangınlar</a> sayfasındaki olaylar, uydu tespitlerinin güç, yer ve zamana göre otomatik gruplanmasıdır; doğrulanmış olaylar değildir.</p>
 <ul>
   <li>Bir olay en az 100 MW'lık güçlü bir tespitten başlar (orman yangınları buna ulaşır, tarla yakmaları nadiren); çevresindeki zayıf tespitler (yaklaşık 0,2°
     ve 2 gün öncesinden 3 gün sonrasına kadar) olaya eklenir.</li>
-  <li>Bir olay en az 45 tespit (üç uydu için), toplam 1500 MW ister ve en fazla 14 gün sürer. Bu eşikler Haziran-Kasım 2026 verisinden seçildi ve geçicidir.</li>
+  <li>Bir olay en az 45 tespit (üç uydu için), toplam 1500 MW ister ve en fazla 14 gün sürer. Bu eşikler Haziran-Kasım 2026 verisinden seçildi ve geçicidir. Eski yıllarda daha az uydu olduğu için (Suomi NPP 2012'den, NOAA-20 Nisan 2018'den, NOAA-21 Ocak 2023'ten beri) bu iki eşik o günlerin uydu sayısına göre küçültülür: tek uydunun olduğu yıllarda üçte biri, iki uydunun olduğu yıllarda üçte ikisi. 2016'dan bugüne olan olaylar bu şekilde bulunur; son 4 aylık olaylar her yeni veriyle, eskileri bir kez bulunup veritabanında saklanır.</li>
   <li>Olayın kapladığı alanın çapı gösterilir. Çok geniş alana yayılmış olaylar çoğunlukla tarla ve anız yakmasıdır. Orman yangını olup olmadığına otomatik karar
     verilmez, çünkü şekil ve güç ölçüleri ikisini güvenilir biçimde ayırmadı.</li>
   <li>Yer adları en yakın ilçe merkezine göredir ve yaklaşıktır. Noktalar uydunun gözlem anıdır; yanan alanın sınırı değildir.</li>

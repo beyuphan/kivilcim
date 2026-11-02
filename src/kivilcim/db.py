@@ -5,7 +5,8 @@ from kivilcim.models import Base
 
 
 def make_engine(url: str) -> Engine:
-    return create_engine(url)
+    # SQLite: wait up to a minute for another writer (a backfill next to the running site) instead of failing.
+    return create_engine(url, connect_args={"timeout": 60} if url.startswith("sqlite") else {})
 
 
 def init_db(engine: Engine) -> None:

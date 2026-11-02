@@ -30,9 +30,10 @@ from kivilcim.alerts import AlertService, BotPoller, Telegram
 from kivilcim.cards import render_card
 from kivilcim.config import Settings, get_settings
 from kivilcim.db import init_db, make_engine, make_session_factory
-from kivilcim.events import Event, find_events
+from kivilcim.events import Event
 from kivilcim.fixed import cell_of, find_fixed_cells
 from kivilcim.geo import bounding_box, haversine_km
+from kivilcim.history import EDGE_DAYS, live_events, live_from, materialize, stored_events, stored_key
 from kivilcim.imagery import find_before_after
 from kivilcim.models import EventImagery, FireDetection, IngestRun, WeatherSnapshot
 from kivilcim.passes import (
@@ -940,9 +941,15 @@ def create_app(
     fixed_cache: dict = {"key": None, "cells": set()}
 
     def fixed_cells(session: Session) -> set:
-        """Cells that look like fixed heat sources, found from the VIIRS history. Cached until a new
-        detection is stored (see all_events for why a count and max id are a safe key)."""
-        condition = (FireDetection.instrument == "VIIRS", FireDetection.confidence_level != "low")
+        """Cells that look like fixed heat sources, found from the last year of VIIRS detections (a year is
+        plenty to see a source that burns all the time). Cached until a new detection is stored (see
+        all_events for why a count and max id are a safe key)."""
+        since = clock() - timedelta(days=365)
+        condition = (
+            FireDetection.instrument == "VIIRS",
+            FireDetection.confidence_level != "low",
+            FireDetection.acquired_at >= since,
+        )
         key = tuple(session.execute(select(func.count(FireDetection.id), func.max(FireDetection.id)).where(*condition)).one())
         with fixed_lock:
             if fixed_cache["key"] != key:
@@ -954,24 +961,42 @@ def create_app(
                 )
             return fixed_cache["cells"]
 
+    def _utc_day(day: date) -> datetime:
+        return datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
+
     events_lock = threading.Lock()
     events_cache: dict = {"key": None, "events": []}
 
     def all_events(session: Session) -> list[Event]:
-        """Events from VIIRS detections only: MODIS pixels are 1 km, so their heat power is on a
-        different scale and would distort the strength thresholds. The result is cached until a
-        new detection is stored (rows only ever get added, so a count and max id are a safe key)."""
-        key = tuple(
-            session.execute(
-                select(func.count(FireDetection.id), func.max(FireDetection.id)).where(
-                    FireDetection.instrument == "VIIRS"
-                )
-            ).one()
+        """Fire events, most recent first: the stored ones from earlier years plus the ones found now in the
+        recent detections. Events come from VIIRS detections only: MODIS pixels are 1 km, so their heat
+        power is on a different scale and would distort the strength thresholds. The recent part is cached
+        until a new detection is stored (rows only ever get added, so a count and max id are a safe key)."""
+        today = clock().date()
+        start = live_from(today) - timedelta(days=EDGE_DAYS)
+        recent = (
+            func.count(FireDetection.id),
+            func.max(FireDetection.id),
+        )
+        key = (
+            live_from(today),
+            *tuple(
+                session.execute(
+                    select(*recent).where(FireDetection.instrument == "VIIRS", FireDetection.acquired_at >= _utc_day(start))
+                ).one()
+            ),
+            *stored_key(session),
         )
         with events_lock:
             if events_cache["key"] != key:
-                rows = session.scalars(select(FireDetection).where(FireDetection.instrument == "VIIRS")).all()
-                events_cache.update(key=key, events=find_events(rows))
+                events_cache.update(
+                    key=key,
+                    events=sorted(
+                        [*live_events(session, today), *stored_events(session)],
+                        key=lambda e: (e.start, e.total_frp),
+                        reverse=True,
+                    ),
+                )
             return events_cache["events"]
 
     @app.get("/events", response_model=EventsResponse)
@@ -980,7 +1005,8 @@ def create_app(
         turkey_only: bool = True,
         since: date | None = None,
         until: date | None = None,
-        limit: int = Query(default=50, ge=1, le=200),
+        sort: Literal["recent", "largest"] = "recent",
+        limit: int = Query(default=50, ge=1, le=500),
         session: Session = Depends(get_session),
     ) -> EventsResponse:
         response.headers["Cache-Control"] = "public, max-age=60"
@@ -990,7 +1016,10 @@ def create_app(
             if (e.in_turkey or not turkey_only)
             and (since is None or e.end >= since)
             and (until is None or e.start <= until)
-        ][:limit]
+        ]
+        if sort == "largest":
+            found.sort(key=lambda e: -e.total_frp)
+        found = found[:limit]
         return EventsResponse(
             count=len(found), events=[event_out(e) for e in found], note=EVENTS_NOTE, disclaimer=DISCLAIMER
         )
@@ -1347,6 +1376,7 @@ def create_app(
                 refresh_elements(session, weather_client, clock())
         except Exception:
             log.exception("could not refresh the satellite orbit data")
+        threading.Thread(target=build_history, name="build-history", daemon=True).start()
         if alert_service:
             try:
                 alert_service.dispatch()
@@ -1365,6 +1395,20 @@ def create_app(
         return BotInfo(enabled=bool(alert_service and bot["username"]), username=bot["username"] or None)
 
     app.state.alerts = alert_service
+    history_lock = threading.Lock()
+
+    def build_history() -> None:
+        """Store the events that have left the live window (older years are found once, not on every request)."""
+        if not history_lock.acquire(blocking=False):
+            return
+        try:
+            materialize(session_factory, clock().date())
+        except Exception:
+            log.exception("could not build the fire history")
+        finally:
+            history_lock.release()
+
+    app.state.build_history = build_history
     app.state.warm_imagery = warm_imagery
 
     app.state.warm_weather = warm_weather  # also lets tests and tools call it

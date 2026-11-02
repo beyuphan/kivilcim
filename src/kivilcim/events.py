@@ -31,6 +31,16 @@ MIN_TOTAL_FRP = 500.0 * SATELLITES  # MW, summed over the event's detections
 MIN_MAX_FRP = 100.0  # MW, one detection this strong seeds an event (does not depend on the count)
 MAX_DAYS = 14
 
+# The VIIRS satellites went up one after another: Suomi NPP (data from 2012), NOAA-20 (April 2018) and
+# NOAA-21 (January 2023). In earlier years fewer satellites saw a fire, so the count and the heat power
+# a real fire reaches are smaller, and the two thresholds above are scaled to the satellites of the day.
+NOAA20_FROM = date(2018, 4, 1)
+NOAA21_FROM = date(2023, 1, 1)
+
+
+def satellites_on(day: date) -> int:
+    return 1 + (day >= NOAA20_FROM) + (day >= NOAA21_FROM)
+
 # Seeds this close in space (cells) and time (days) belong to the same event.
 LINK_CELLS = 2
 LINK_DAYS = 2
@@ -74,8 +84,11 @@ def find_events(
     min_max_frp: float = MIN_MAX_FRP,
     recurring_share: float = RECURRING_SHARE,
     min_history_days: int = MIN_HISTORY_DAYS,
+    scale_by_satellites: bool = False,
 ) -> list[Event]:
-    """Events, most recent first. Low-confidence detections are ignored."""
+    """Events, most recent first. Low-confidence detections are ignored. With `scale_by_satellites` the
+    two thresholds that grow with the number of satellites are scaled to the satellites that existed on
+    the event's days (for detections from before all three flew)."""
     rows = [d for d in detections if d.confidence_level != "low"]
 
     fixed = find_fixed_cells(
@@ -119,7 +132,10 @@ def find_events(
         days = sorted({m.acquired_at.date() for m in members})
         span = (days[-1] - days[0]).days + 1
         total = sum(m.frp or 0.0 for m in members)
-        if len(members) < min_detections or total < min_total_frp or span > max_days:
+        scale = 1.0
+        if scale_by_satellites:
+            scale = sum(satellites_on(day) for day in days) / len(days) / SATELLITES
+        if len(members) < min_detections * scale or total < min_total_frp * scale or span > max_days:
             continue
 
         if total:

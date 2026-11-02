@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import BigInteger, DateTime, Float, Index, Integer, String, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Float, Index, Integer, String, UniqueConstraint
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
@@ -71,6 +71,33 @@ class WeatherSnapshot(Base):
     wind_speed: Mapped[float] = mapped_column(Float)  # km/h
     wind_direction: Mapped[float | None] = mapped_column(Float, nullable=True)  # degrees
     precip_recent: Mapped[float] = mapped_column(Float)  # mm over the last 72 h
+
+
+class FireEventRow(Base):
+    """A fire event found in older detections, kept so the past-fires page does not have to read years of
+    detections each time. Recent events are found from the detections themselves (see `kivilcim.history`)."""
+
+    __tablename__ = "fire_events"
+    __table_args__ = (Index("ix_fire_events_start", "start"),)
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    start: Mapped[date] = mapped_column(Date)
+    end: Mapped[date] = mapped_column(Date)
+    peak_day: Mapped[date] = mapped_column(Date)
+    days: Mapped[int] = mapped_column(Integer)
+    detections: Mapped[int] = mapped_column(Integer)
+    total_frp: Mapped[float] = mapped_column(Float)
+    max_frp: Mapped[float] = mapped_column(Float)
+    center_lat: Mapped[float] = mapped_column(Float)
+    center_lon: Mapped[float] = mapped_column(Float)
+    min_lat: Mapped[float] = mapped_column(Float)
+    max_lat: Mapped[float] = mapped_column(Float)
+    min_lon: Mapped[float] = mapped_column(Float)
+    max_lon: Mapped[float] = mapped_column(Float)
+    extent_km: Mapped[float] = mapped_column(Float)
+    district: Mapped[str] = mapped_column(String(80))
+    province: Mapped[str] = mapped_column(String(80))
+    in_turkey: Mapped[bool] = mapped_column(Boolean)
 
 
 class OrbitElements(Base):

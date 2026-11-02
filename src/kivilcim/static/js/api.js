@@ -36,7 +36,8 @@ export const api = {
     }
   },
   status: (signal) => getJSON("/status", { signal, ttl: 20_000 }),
-  events: (signal) => getJSON("/events?limit=100", { signal, ttl: 60_000 }),
+  /** Past fires, newest first or the biggest first. */
+  events: (signal, { sort = "recent", limit = 500 } = {}) => getJSON(`/events?${q({ sort, limit })}`, { signal, ttl: 60_000 }),
   event: (id, signal) => getJSON(`/events/${encodeURIComponent(id)}?days_before=2&days_after=5&padding_deg=0.05`, { signal, ttl: 300_000 }),
   imagery: (id, signal) => getJSON(`/events/${encodeURIComponent(id)}/imagery`, { signal, ttl: 300_000 }),
   /** When the satellites last scanned a place and when they will next. Null when it cannot be told. */

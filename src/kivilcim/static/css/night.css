@@ -1,0 +1,174 @@
+/* ======================================================================================================
+ * The night look. The map fills the screen; the top bar and the panel float over it as glass.
+ * Heat is the one warm color on a dark, cool page, so a fire is always the brightest thing you see.
+ * Loaded after app.css, which holds the structure; this file holds the look.
+ * ==================================================================================================== */
+
+:root {
+  color-scheme: dark;
+  --bg: #0D1015;
+  --surface: #181C23;
+  --surface-2: #212630;
+  --glass: rgb(14 17 22 / 0.78);
+  --glass-edge: rgb(255 255 255 / 0.09);
+  --ember: #FF8A1F;
+  --ember-hot: #FF3B2F;
+  --ember-glow: rgb(255 120 30 / 0.35);
+  --shadow-glass: 0 1px 0 rgb(255 255 255 / 0.06) inset, 0 18px 48px rgb(0 0 0 / 0.45), 0 2px 8px rgb(0 0 0 / 0.35);
+}
+
+.app { position: relative; display: block; height: 100dvh; }
+.stage { position: absolute; inset: 0; display: block; }
+.mapwrap { position: absolute; inset: 0; }
+#map { background: #0B0E13; }
+
+.topbar {
+  position: absolute; inset: 12px 12px auto 12px; z-index: 1200; height: 54px;
+  border-radius: var(--r-xl); padding-inline: var(--s-3);
+  background: var(--glass); box-shadow: var(--shadow-glass);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid var(--glass-edge);
+}
+body > .topbar { position: fixed; }
+.brand img { border-radius: 9px; box-shadow: 0 0 18px var(--ember-glow); }
+.nav a[aria-current="page"] { background: linear-gradient(135deg, rgb(255 138 31 / 0.22), rgb(255 59 47 / 0.18)); color: #FFB066; box-shadow: inset 0 0 0 1px rgb(255 138 31 / 0.35); }
+.status-chip, .sos { background: rgb(255 255 255 / 0.06); border-color: var(--glass-edge); }
+.sos { background: rgb(255 59 47 / 0.18); color: #FFB4AE; }
+
+.panel {
+  inset: 80px auto 12px 12px; width: var(--panel-w); min-height: 0; position: absolute;
+  border-radius: 26px; padding: var(--s-3);
+  background: var(--glass); box-shadow: var(--shadow-glass); border: 1px solid var(--glass-edge);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5); backdrop-filter: blur(22px) saturate(1.5);
+  scrollbar-width: thin; scrollbar-color: rgb(255 255 255 / 0.2) transparent;
+}
+.card { background: rgb(255 255 255 / 0.055); border: 1px solid rgb(255 255 255 / 0.07); box-shadow: none; }
+.search.card { background: rgb(255 255 255 / 0.08); }
+.input { background: rgb(0 0 0 / 0.28); border-color: rgb(255 255 255 / 0.14); }
+.listbox { background: #1B2029; border: 1px solid var(--glass-edge); }
+.stat, .metric, .compare-card { background: rgb(255 255 255 / 0.06); }
+.row[aria-current] { background: rgb(255 138 31 / 0.14); box-shadow: inset 0 0 0 1px rgb(255 138 31 / 0.35); }
+.tile, .event-card { background: rgb(255 255 255 / 0.055); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.07); }
+@media (hover: hover) { .tile:hover, .event-card:hover { background: rgb(255 255 255 / 0.09); box-shadow: inset 0 0 0 1px rgb(255 138 31 / 0.4), 0 10px 30px rgb(0 0 0 / 0.35); } }
+.notice { background: rgb(255 59 47 / 0.14); color: #FFC7C2; }
+.panel > .notice { font-size: var(--fs-xs); }
+.btn-primary { background: linear-gradient(135deg, #FF8A1F, #FF4D2E); color: #1A0A00; box-shadow: 0 6px 20px rgb(255 98 40 / 0.35); }
+@media (hover: hover) { .btn-primary:hover:not(:disabled) { background: linear-gradient(135deg, #FFA040, #FF5F42); } }
+.chip[aria-pressed="true"] { background: linear-gradient(135deg, #FF8A1F, #FF4D2E); border-color: transparent; color: #1A0A00; }
+.leaflet-bar { background: var(--glass) !important; -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border: 1px solid var(--glass-edge) !important; }
+.leaflet-bar a { background: transparent; color: var(--text); }
+.leaflet-control-attribution { background: rgb(14 17 22 / 0.7) !important; color: var(--text-3) !important; }
+.leaflet-control-attribution a { color: var(--text-2) !important; }
+
+/* the map controls move out from under the top bar */
+.map-card { background: var(--glass); border: 1px solid var(--glass-edge); box-shadow: var(--shadow-glass); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); border-radius: 18px; }
+.map-toggle { inset-block-start: 80px; inset-block-end: auto; inset-inline-end: 12px; }
+.legend { inset-inline-start: calc(var(--panel-w) + 28px); inset-block-end: 20px; max-width: 300px; }
+.segmented { background: rgb(0 0 0 / 0.3); }
+.segmented button[aria-pressed="true"], .segmented button[aria-selected="true"] { background: rgb(255 255 255 / 0.14); box-shadow: none; color: #fff; }
+
+/* ---- the hero at the top of the panel ---- */
+.hero {
+  position: relative; overflow: hidden; display: grid; gap: var(--s-2); padding: var(--s-5);
+  border-radius: 22px; border: 1px solid rgb(255 138 31 / 0.25);
+  background: radial-gradient(120% 140% at 0% 0%, rgb(255 98 40 / 0.35), transparent 55%), radial-gradient(90% 120% at 100% 100%, rgb(255 59 47 / 0.22), transparent 60%), rgb(255 255 255 / 0.04);
+}
+.live { display: inline-flex; align-items: center; gap: var(--s-2); font-size: var(--fs-xs); font-weight: 700; color: #FFD0A0; letter-spacing: 0.02em; text-transform: uppercase; }
+.live i { width: 8px; height: 8px; border-radius: 50%; background: #FF5A36; box-shadow: 0 0 0 0 rgb(255 90 54 / 0.7); }
+.hero-num { display: flex; align-items: baseline; gap: var(--s-3); }
+.hero-num b { font-size: 3.6rem; line-height: 0.95; letter-spacing: -0.04em; font-weight: 800; background: linear-gradient(180deg, #fff, #FFB27A); -webkit-background-clip: text; background-clip: text; color: transparent; font-variant-numeric: tabular-nums; }
+.hero-num span { font-size: var(--fs-lg); font-weight: 650; color: #FFD9B8; }
+.hero-title { font-size: var(--fs-xl); letter-spacing: -0.02em; }
+.hero-text { color: var(--text-2); font-size: var(--fs-sm); line-height: 1.5; }
+.hero-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-2); margin-top: var(--s-2); }
+.fact { display: grid; gap: 2px; padding: var(--s-2) var(--s-3); border-radius: 14px; background: rgb(0 0 0 / 0.28); }
+.fact b { font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
+.fact span { font-size: 11px; color: var(--text-2); line-height: 1.25; }
+
+/* ---- pins: real elements, so they can be clicked and reached with the keyboard ---- */
+.pin-wrap { background: none; border: 0; }
+.pin {
+  position: relative; display: grid; place-items: center; width: var(--s); height: var(--s); border-radius: 50%; cursor: pointer;
+  background: radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--c) 45%, #fff) 0%, var(--c) 52%, color-mix(in srgb, var(--c) 62%, #000) 100%);
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.92), 0 0 22px 6px color-mix(in srgb, var(--c) 65%, transparent), 0 6px 14px rgb(0 0 0 / 0.5);
+  transition: scale 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+.pin b { color: #fff; font-size: 12px; font-weight: 800; text-shadow: 0 1px 3px rgb(0 0 0 / 0.65); font-variant-numeric: tabular-nums; pointer-events: none; }
+.pin[data-active] { scale: 1.2; box-shadow: 0 0 0 3px #fff, 0 0 30px 10px color-mix(in srgb, var(--c) 75%, transparent), 0 6px 14px rgb(0 0 0 / 0.5); }
+.pin[data-hover] { scale: 1.15; }
+.leaflet-marker-icon:focus { outline: none; }
+.leaflet-marker-icon:focus-visible .pin { box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--accent), 0 0 24px 8px color-mix(in srgb, var(--c) 65%, transparent); }
+@media (hover: hover) { .pin:hover { scale: 1.15; } }
+.pin:active { scale: 0.94; }
+
+/* ---- the card that opens on a pin ---- */
+.kv-popup .leaflet-popup-content-wrapper { background: var(--glass); color: var(--text); border-radius: 18px; border: 1px solid var(--glass-edge); box-shadow: var(--shadow-glass); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); padding: 2px; }
+.kv-popup .leaflet-popup-content { margin: var(--s-3) var(--s-4); font: inherit; }
+.kv-popup .leaflet-popup-tip { background: var(--glass); }
+.kv-popup a.leaflet-popup-close-button { color: var(--text-2); width: 32px; height: 32px; font-size: 22px; line-height: 32px; }
+.pop { display: grid; gap: var(--s-2); }
+.pop b { font-size: var(--fs-md); letter-spacing: -0.01em; padding-inline-end: var(--s-5); }
+.pop-meta { color: var(--text-2); font-size: var(--fs-sm); }
+.pop .btn { justify-self: start; margin-top: var(--s-1); }
+.pop a.btn { color: #1A0A00; text-decoration: none; }
+.marker-label { background: var(--glass); color: var(--text); border: 1px solid var(--glass-edge); box-shadow: var(--shadow-glass); border-radius: 10px; }
+.leaflet-tooltip-top.marker-label::before { border-top-color: var(--glass); }
+
+/* ---- heat legend ---- */
+.heat-ramp { height: 10px; border-radius: var(--r-pill); background: linear-gradient(90deg, #FFD54A, #FFA21C, #FF6A1A, #F0302B, #B3002F); box-shadow: 0 0 12px rgb(255 100 30 / 0.4); }
+.heat-ends { display: flex; justify-content: space-between; font-size: var(--fs-xs); color: var(--text-2); }
+.row-heat { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-inline-end: var(--s-2); }
+
+/* ---- loading ---- */
+.spinner { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid rgb(255 255 255 / 0.25); border-top-color: var(--ember); flex: none; }
+.map-loader {
+  position: absolute; z-index: 900; inset-block-start: 80px; inset-inline: 0; margin-inline: auto; width: max-content; max-width: calc(100% - 24px);
+  display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-4) var(--s-2) var(--s-3); border-radius: var(--r-pill); overflow: hidden;
+  background: var(--glass); border: 1px solid var(--glass-edge); box-shadow: var(--shadow-glass); color: var(--text); font-weight: 650; font-size: var(--fs-sm);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+}
+.map-loader-bar { position: absolute; inset-inline: 0; inset-block-end: 0; height: 3px; background: linear-gradient(90deg, transparent, var(--ember), transparent); background-size: 40% 100%; background-repeat: no-repeat; }
+.compare-wait { display: inline-flex; align-items: center; gap: var(--s-3); background: var(--glass); border: 1px solid var(--glass-edge); }
+
+/* ---- the years of the past fires ---- */
+.years { display: flex; align-items: flex-end; gap: var(--s-2); }
+.year-bars { flex: 1; display: flex; align-items: flex-end; gap: 3px; height: 64px; min-width: 0; }
+.year-bar { flex: 1; min-width: 14px; max-width: 30px; height: 100%; padding: 0; border: 0; background: transparent; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; color: var(--text-3); font-size: 10px; cursor: pointer; }
+.year-bar i { display: block; width: 100%; border-radius: 5px 5px 2px 2px; background: linear-gradient(180deg, #FF8A1F, #B3002F); opacity: 0.55; transition: opacity 150ms var(--ease); }
+.year-bar:disabled { cursor: default; }
+.year-bar:disabled i { background: var(--border-strong); opacity: 0.5; }
+.year-bar[aria-pressed="true"] { color: #fff; }
+.year-bar[aria-pressed="true"] i { opacity: 1; box-shadow: 0 0 14px rgb(255 120 30 / 0.55); }
+@media (hover: hover) { .year-bar:hover:not(:disabled) i { opacity: 0.95; } }
+.year-all { align-self: center; flex: none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .live i { animation: live 1.8s ease-out infinite; }
+  @keyframes live { 0% { box-shadow: 0 0 0 0 rgb(255 90 54 / 0.7); } 100% { box-shadow: 0 0 0 10px rgb(255 90 54 / 0); } }
+  .pin-pulse::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 2px solid var(--c); opacity: 0; animation: ping 2.4s cubic-bezier(0, 0, 0.2, 1) infinite; pointer-events: none; }
+  @keyframes ping { 0% { transform: scale(0.85); opacity: 0.8; } 75%, 100% { transform: scale(1.7); opacity: 0; } }
+  .spinner { animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .map-loader { animation: loader-in 220ms var(--ease); }
+  @keyframes loader-in { from { opacity: 0; transform: translateY(-8px) scale(0.96); } to { opacity: 1; transform: none; } }
+  .map-loader-bar { animation: sweep 1.2s ease-in-out infinite; }
+  @keyframes sweep { from { background-position: -60% 0; } to { background-position: 160% 0; } }
+  .leaflet-layer { transition: opacity 420ms ease; }
+}
+
+/* on a wide screen the panel covers the left of the map: the before label sits beside it, not under it */
+@media (min-width: 900px) { .compare-label[data-side="before"] { inset-inline-start: calc(var(--panel-w) + 28px); } }
+
+/* ---- documents on the dark page ---- */
+.doc-body { background: var(--bg); padding-top: 78px; height: 100dvh; }
+
+/* ---- small screens: the panel is a sheet, the top bar stays slim ---- */
+@media (max-width: 899px) {
+  .topbar { inset: 8px 8px auto 8px; height: 50px; }
+  .panel { inset: auto 0 0 0; width: auto; border-radius: 26px 26px 0 0; border-inline: 0; border-block-end: 0; }
+  .sheet-handle { background: transparent; }
+  .map-toggle { inset-block-start: 66px; inset-inline-end: 8px; max-width: calc(100% - 16px); }
+  .legend { display: none; } /* the same explanation is in the panel */
+  .map-loader { inset-block-start: 122px; }
+  .hero-num b { font-size: 3rem; }
+}

@@ -8,6 +8,8 @@ from starlette.responses import Response
 
 # Satellite image tiles for the before and after view.
 IMAGERY_HOST = "https://gibs.earthdata.nasa.gov"
+# The cloud-free satellite base map (Sentinel-2 cloudless by EOX).
+CLOUDLESS_HOST = "https://tiles.maps.eox.at"
 # The generated API documentation loads its own assets, so it gets no page policy.
 NO_PAGE_POLICY = ("/docs", "/redoc")
 # The embeddable map is the only page that may be shown inside other sites.
@@ -32,7 +34,7 @@ def build_csp(tile_url: str) -> str:
     """Scripts and the map library come from this site only. Styles may be inline (the map library
     sets some), images may also come from the map tile host and the satellite imagery host."""
     tiles = tile_origin(tile_url)
-    img = " ".join(filter(None, ["'self'", "data:", "blob:", IMAGERY_HOST, tiles]))
+    img = " ".join(filter(None, ["'self'", "data:", "blob:", IMAGERY_HOST, CLOUDLESS_HOST, tiles]))
     return "; ".join(
         [
             "default-src 'self'",

@@ -2,7 +2,7 @@
 
 import { api } from "./api.js";
 import { el, clear, fmt, icon } from "./ui.js";
-import { fit, timeColor, getCanvas, TURKEY } from "./map.js";
+import { fit, timeColor, pin, TURKEY } from "./map.js";
 import { tileFor, tileUrl } from "./tilemath.js";
 
 const PAGE = 20;
@@ -94,55 +94,107 @@ export function mount(ctx) {
   ctx.setTitle("Geçmiş yangınlar");
   let events = [];
   let year = "all";
+  let sort = "recent";
   let shown = PAGE;
   let markers = new Map();
 
-  const chips = el("div", { class: "chips", role: "group", "aria-label": "Yıla göre süz" });
+  const years = el("div", { class: "years", role: "group", "aria-label": "Yıla göre süz" });
   const list = el("div", { class: "panel-body" });
   const more = el("button", { class: "btn btn-secondary", type: "button", hidden: true, onclick: () => { shown += PAGE; renderList(); } }, "Daha fazla göster");
   const heading = el("p", { class: "lede" });
+  const sorter = el("div", { class: "segmented", role: "group", "aria-label": "Sıralama" },
+    ["recent", "largest"].map((key) => el("button", { type: "button", "aria-pressed": String(key === sort), onclick: () => { sort = key; shown = PAGE; renderSort(); renderList(); } }, key === "recent" ? "En yeni" : "En büyük")));
+  const renderSort = () => [...sorter.children].forEach((b, i) => b.setAttribute("aria-pressed", String((i === 0) === (sort === "recent"))));
 
   body.append(
     el("div", { class: "section-title" }, el("h2", {}, "Geçmiş yangınlar")),
     heading,
-    chips,
+    years,
+    sorter,
     list,
     more,
   );
   list.append(el("div", { class: "skeleton", style: { height: "170px" } }), el("div", { class: "skeleton", style: { height: "170px" } }));
 
-  api.events(signal).then((data) => {
-    events = [...data.events].sort((a, b) => (a.start < b.start ? 1 : -1));
-    renderChips();
+  const legend = el("div", { class: "map-card legend" },
+    el("h3", {}, "Yangınların yılı"), el("div", { class: "ramp", "aria-hidden": "true" }),
+    el("div", { class: "heat-ends" }, el("span", { id: "year-first" }, ""), el("span", { id: "year-last" }, "")),
+    el("p", { class: "legend-note" }, "Pinin boyutu yangının gücünü gösterir. Bir pine dokunun."));
+  ctx.mapwrap.append(legend);
+  ctx.onCleanup(() => legend.remove());
+
+  api.events(signal, { sort: "recent", limit: 500 }).then((data) => {
+    events = data.events;
+    renderYears();
     renderList();
     draw();
+    const set = new Set(events.map((e) => e.start.slice(0, 4)));
+    const sorted = [...set].sort();
+    legend.querySelector("#year-first").textContent = sorted[0] || "";
+    legend.querySelector("#year-last").textContent = sorted[sorted.length - 1] || "";
     body.append(el("details", { class: "card disclosure" }, el("summary", {}, icon("info", 18), "Bu yangınlar nasıl bulundu?", icon("chevron-down", 18)),
       el("div", { class: "body" },
         el("p", {}, "Olaylar, uydu tespitlerinin güç, yer ve zamana göre otomatik gruplanmasıdır; doğrulanmış olaylar değildir. Bazıları tarla yakması ya da başka ısı kaynakları olabilir."),
-        el("p", {}, "Resmi bir kayıt değildir. Yer adları en yakın ilçe merkezine göredir ve yaklaşıktır."))));
+        el("p", {}, "Eski yıllarda daha az uydu olduğu için (Suomi NPP 2012'den, NOAA-20 2018'den, NOAA-21 2023'ten beri) eşikler o günlerin uydu sayısına göre ayarlanır."),
+        el("p", {}, "Resmi bir kayıt değildir. Yer adları en yakın ilçe merkezine göredir ve yaklaşık."))));
   }).catch((error) => {
     if (error.name === "AbortError") return;
     clear(list).append(el("div", { class: "card empty" }, el("h3", {}, "Liste yüklenemedi"), el("p", {}, "Bağlantınızı kontrol edip sayfayı yenileyin.")));
   });
 
-  const years = () => [...new Set(events.map((e) => e.start.slice(0, 4)))].sort().reverse();
-  const visible = () => events.filter((e) => year === "all" || e.start.startsWith(year));
+  const visible = () => events
+    .filter((e) => year === "all" || e.start.startsWith(year))
+    .sort(sort === "largest" ? (a, b) => b.total_frp_mw - a.total_frp_mw : (a, b) => (a.start < b.start ? 1 : -1));
 
-  function renderChips() {
-    clear(chips);
-    const options = ["all", ...years()];
-    for (const value of options) {
-      chips.append(el("button", { class: "chip", type: "button", "aria-pressed": String(value === year), onclick: () => { year = value; shown = PAGE; renderChips(); renderList(); draw(); } }, value === "all" ? "Tümü" : value));
+  // A bar for each year, as tall as the fire it saw: pick a year to see only its fires.
+  function renderYears() {
+    clear(years);
+    const by = new Map();
+    for (const e of events) {
+      const y = e.start.slice(0, 4);
+      const item = by.get(y) || { count: 0, power: 0 };
+      item.count += 1;
+      item.power += e.total_frp_mw;
+      by.set(y, item);
     }
+    const all = [...by.keys()].sort();
+    if (!all.length) return;
+    const first = Number(all[0]);
+    const last = Number(all[all.length - 1]);
+    const max = Math.max(...[...by.values()].map((v) => v.power), 1);
+    years.append(el("button", { class: "chip year-all", type: "button", "aria-pressed": String(year === "all"), onclick: () => pickYear("all") }, "Tümü"));
+    const bars = el("div", { class: "year-bars" });
+    for (let y = first; y <= last; y++) {
+      const item = by.get(String(y));
+      bars.append(el("button", {
+        class: "year-bar", type: "button", disabled: !item, "aria-pressed": String(year === String(y)),
+        "aria-label": item ? `${y}: ${item.count} yangın` : `${y}: kayıt yok`, title: item ? `${y}: ${item.count} yangın` : `${y}: kayıt yok`,
+        onclick: () => pickYear(String(y)),
+      }, el("i", { style: { height: item ? `${Math.max(8, Math.round((item.power / max) * 100))}%` : "3px" } }), el("span", {}, String(y).slice(2))));
+    }
+    years.append(bars);
+  }
+
+  function pickYear(value) {
+    year = value;
+    shown = PAGE;
+    renderYears();
+    renderList();
+    draw();
   }
 
   function renderList() {
     clear(list);
     const all = visible();
     heading.textContent = all.length
-      ? `${fmt.num(all.length)} yangın kaydı. Her birinde uydunun yangından önceki ve sonraki görüntüsü var.`
+      ? `${fmt.num(all.length)} yangın kaydı${year === "all" ? "" : `, ${year}`}. Her birinde uydunun yangından önceki ve sonraki görüntüsü var.`
       : "Bu dönemde kayıtlı yangın yok.";
-    all.slice(0, shown).forEach((event, i) => list.append(eventCard(ctx, event, { eager: i < 2 })));
+    all.slice(0, shown).forEach((event, i) => {
+      const card = eventCard(ctx, event, { eager: i < 2 });
+      card.addEventListener("pointerenter", () => markers.get(event.id)?.getElement()?.querySelector(".pin")?.setAttribute("data-hover", ""));
+      card.addEventListener("pointerleave", () => markers.get(event.id)?.getElement()?.querySelector(".pin")?.removeAttribute("data-hover"));
+      list.append(card);
+    });
     more.hidden = all.length <= shown;
   }
 
@@ -151,16 +203,20 @@ export function mount(ctx) {
     markers = new Map();
     const all = visible();
     if (!all.length) return fit(TURKEY, { animate: false });
-    const first = Math.min(...all.map((e) => Date.parse(e.start)));
-    const last = Math.max(...all.map((e) => Date.parse(e.start)));
+    const first = Math.min(...events.map((e) => Date.parse(e.start)));
+    const last = Math.max(...events.map((e) => Date.parse(e.start)));
     const span = Math.max(1, last - first);
-    for (const e of all) {
-      const marker = L.circleMarker([e.center_lat, e.center_lon], {
-        renderer: getCanvas(), radius: 7 + Math.min(13, Math.sqrt(e.extent_km)), weight: 2, color: "#fff", fillOpacity: 0.85,
-        fillColor: timeColor((Date.parse(e.start) - first) / span),
+    for (const e of [...all].sort((a, b) => a.total_frp_mw - b.total_frp_mw)) {
+      const size = 26 + Math.min(26, Math.sqrt(e.total_frp_mw) / 3);
+      const marker = pin([e.center_lat, e.center_lon], {
+        color: timeColor((Date.parse(e.start) - first) / span), label: e.start.slice(2, 4), size, pulse: false,
+        title: `${eventName(e)}, ${fmt.shortDay(e.start)} ${e.start.slice(0, 4)}`,
+        content: el("div", { class: "pop" },
+          el("b", {}, eventName(e)),
+          el("span", { class: "pop-meta" }, eventMeta(e)),
+          el("a", { class: "btn btn-primary btn-small", href: `/history/${encodeURIComponent(e.id)}`, "data-link": "" }, "Öncesi ve sonrası", icon("chevron-right", 16))),
       });
-      marker.on("click", () => ctx.navigate(`/history/${encodeURIComponent(e.id)}`));
-      marker.bindTooltip(`${eventName(e)} · ${fmt.shortDay(e.start)}`, { direction: "top", className: "marker-label" });
+      marker.bindTooltip(`${eventName(e)} · ${e.start.slice(0, 4)}`, { direction: "top", className: "marker-label", offset: [0, -size / 2] });
       marker.addTo(layer);
       markers.set(e.id, marker);
     }

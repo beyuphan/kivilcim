@@ -1,8 +1,8 @@
 // The home view: what the satellites saw in the last 24 hours, and a way into the past.
 
 import { api } from "./api.js";
-import { el, clear, icon, fmt, levelPill, LEVELS, FACTORS, agoFrom, ago, announce } from "./ui.js";
-import { levelColor, fit, TURKEY, getCanvas } from "./map.js";
+import { el, clear, icon, fmt, levelPill, FACTORS, agoFrom, announce } from "./ui.js";
+import { fit, TURKEY, pin, heatColor } from "./map.js";
 import { eventCard } from "./history.js";
 import * as saved from "./saved.js";
 import { distanceKm } from "./tilemath.js";
@@ -20,8 +20,9 @@ export function mount(ctx) {
   let showSmall = false;
   let markers = new Map();
   let weatherReady = false;
+  let selected = null;
 
-  const summary = el("div", { class: "card card-pad", "aria-live": "polite" });
+  const hero = el("div", { class: "hero", "aria-live": "polite" });
   const list = el("div", { class: "rows", role: "list" });
   const listCard = el("div", { class: "card" }, list);
   const smallToggle = el("button", { class: "btn btn-ghost btn-small", type: "button", hidden: true, onclick: () => { showSmall = !showSmall; renderList(); } });
@@ -33,26 +34,27 @@ export function mount(ctx) {
     if (bot.enabled && bot.username) toolTiles.append(el("a", { class: "tile tile-wide", href: `https://t.me/${bot.username}`, target: "_blank", rel: "noopener" }, icon("alert", 22), el("b", {}, "Yakınımda yangın çıkınca haber ver"), el("span", {}, "Telegram botuna yerinizi gönderin; uydu yeni bir yangın görünce size yazar")));
   }).catch(() => {});
   body.append(
-    mine,
+    hero,
     toolTiles,
-    el("div", { class: "section-title" }, el("h2", {}, "Şu an aktif bölgeler")),
-    summary,
+    mine,
+    el("div", { class: "section-title" }, el("h2", {}, "Aktif bölgeler")),
     explainer(),
     listCard,
     smallToggle,
-    el("div", { class: "section-title" }, el("h2", {}, "Geçmiş yangınlar"), el("a", { href: "/history", "data-link": "" }, "Tümünü gör")),
-    el("p", { class: "lede" }, "Büyük yangınların öncesi ve sonrası uydu görüntüsüyle. Birine dokunun, haritada yayılışını izleyin."),
+    el("div", { class: "section-title" }, el("h2", {}, "Geçmişin en büyük yangınları"), el("a", { href: "/history", "data-link": "" }, "Tümünü gör")),
+    el("p", { class: "lede" }, "Yıllara yayılan arşivden en büyükler: her birinin yangından önceki ve sonraki uydu görüntüsü yan yana."),
     featured,
   );
   // Placeholders the size of the real content, so nothing moves when it arrives.
-  summary.append(skeleton(138));
+  hero.append(skeleton(168));
   list.append(skeleton(86), skeleton(86), skeleton(86), skeleton(86));
   featured.append(skeleton(280));
 
   const legend = el("div", { class: "map-card legend" },
-    el("h3", {}, "Daire rengi: yangın tehlike endeksi"),
-    el("div", { class: "scale" }, ["low", "moderate", "high", "very_high", "extreme"].map((l) => levelPill({ level: l }))),
-    el("p", { class: "legend-note", id: "legend-note" }, "Daire boyutu tespit sayısını gösterir. Hava durumu yükleniyor…"));
+    el("h3", {}, "Pin = uydunun gördüğü ısı"),
+    el("div", { class: "heat-ramp", "aria-hidden": "true" }),
+    el("div", { class: "heat-ends" }, el("span", {}, "hafif"), el("span", {}, "çok güçlü")),
+    el("p", { class: "legend-note" }, "Sayı, o bölgedeki uydu tespiti sayısıdır. Bir pine dokunun."));
   ctx.mapwrap.append(legend);
   ctx.onCleanup(() => legend.remove());
 
@@ -66,34 +68,35 @@ export function mount(ctx) {
       const quick = await api.zones(false, signal);
       zones = quick.zones;
       draw();
-      renderSummary(quick);
+      renderHero(quick);
       renderList();
       const full = await api.zones(true, signal);
       zones = full.zones;
       weatherReady = true;
-      recolor();
-      renderSummary(full);
+      renderHero(full);
       renderList();
-      const note = legend.querySelector("#legend-note");
-      if (note) note.textContent = "Daire boyutu tespit sayısını gösterir. Endeks deneyseldir ve geçmişte yangının yayılmasını öngörmedi.";
     } catch (error) {
       if (error.name === "AbortError") return;
-      clear(summary).append(el("p", {}, "Bölgeler yüklenemedi. Bağlantınızı kontrol edip sayfayı yenileyin."));
+      clear(hero).append(el("p", {}, "Bölgeler yüklenemedi. Bağlantınızı kontrol edip sayfayı yenileyin."));
       clear(list);
     }
   }
+
+  function strength(z) { return z.total_frp_mw; }
 
   function draw() {
     layer.clearLayers();
     markers = new Map();
     const bounds = [];
-    for (const z of zones) {
-      const radius = 7 + Math.min(14, Math.sqrt(z.detections) * 2);
-      const marker = L.circleMarker([z.latitude, z.longitude], {
-        renderer: getCanvas(), radius, weight: 2, color: "#fff", fillOpacity: 0.85, fillColor: levelColor(z.risk?.level),
+    for (const z of [...zones].sort((a, b) => strength(a) - strength(b))) {
+      const size = 30 + Math.min(26, Math.sqrt(z.detections) * 3.2);
+      const marker = pin([z.latitude, z.longitude], {
+        color: heatColor(strength(z)), label: String(z.detections), size,
+        title: `${zoneName(z)}: ${plural(z.detections, "tespit", "tespit")}`,
+        content: popupFor(z),
+        onSelect: () => select(z, false),
       });
-      marker.on("click", () => open(z));
-      marker.bindTooltip(zoneName(z), { direction: "top", className: "marker-label", offset: [0, -radius] });
+      marker.bindTooltip(zoneName(z), { direction: "top", className: "marker-label", offset: [0, -size / 2] });
       marker.addTo(layer);
       markers.set(z.id, marker);
       bounds.push([z.latitude, z.longitude]);
@@ -102,36 +105,53 @@ export function mount(ctx) {
     else fit(TURKEY, { animate: false });
   }
 
-  function recolor() {
-    for (const z of zones) markers.get(z.id)?.setStyle({ fillColor: levelColor(z.risk?.level) });
+  // What shows in the card on a pin: the name, what was seen, and a way in.
+  function popupFor(z) {
+    return el("div", { class: "pop" },
+      el("b", {}, zoneName(z)),
+      el("span", { class: "pop-meta" }, `${plural(z.detections, "tespit", "tespit")} · ${fmt.dec(z.total_frp_mw)} MW · ${agoFrom(z.latest_observation_at)}`),
+      el("button", { class: "btn btn-primary btn-small", type: "button", onclick: () => open(z) }, "Ayrıntıları aç", icon("chevron-right", 16)));
+  }
+
+  /** Mark a zone as the one in focus, on the map and in the list. */
+  function select(z, pan = true) {
+    selected = z.id;
+    markers.forEach((m, id) => m.getElement()?.querySelector(".pin")?.toggleAttribute("data-active", id === z.id));
+    list.querySelectorAll(".row").forEach((row) => row.toggleAttribute("aria-current", row.dataset.id === z.id));
+    const marker = markers.get(z.id);
+    if (pan && marker) { map.panTo(marker.getLatLng(), { animate: true }); marker.openPopup(); }
   }
 
   function open(z) {
     ctx.navigate(`/?lat=${z.latitude.toFixed(4)}&lon=${z.longitude.toFixed(4)}&r=${Math.ceil(z.radius_km) + 5}&z=${encodeURIComponent(z.id)}&name=${encodeURIComponent(zoneName(z))}`);
   }
 
-  function renderSummary(data) {
+  function renderHero(data) {
     const detections = zones.reduce((n, z) => n + z.detections, 0);
-    clear(summary);
+    const latest = data.data_as_of.latest_observation_at;
+    clear(hero);
+    hero.append(el("div", { class: "live" }, el("i", { "aria-hidden": "true" }), latest ? `Canlı · son gözlem ${agoFrom(latest)}` : "Canlı"));
     if (!zones.length) {
-      summary.append(el("h3", { class: "card-title" }, "Son 24 saatte aktif bölge yok"),
-        el("p", { class: "card-sub" }, `Uydular Türkiye'de yangın sıcaklığı gözlemlemedi. Son veri: ${ago(data.data_as_of.latest_observation_at ? (Date.now() - new Date(data.data_as_of.latest_observation_at)) / 60000 : 0)}.`));
+      hero.append(el("h2", { class: "hero-title" }, "Son 24 saatte aktif bölge yok"),
+        el("p", { class: "hero-text" }, "Uydular Türkiye'de yangın sıcaklığı gözlemlemedi. Bu, yangın olmadığı anlamına gelmez: uydular günde birkaç kez geçer."));
       announce("Son 24 saatte aktif bölge yok.");
       return;
     }
-    summary.append(
-      el("p", { class: "card-title" }, `Son 24 saatte uydular ${plural(zones.length, "bölgede", "bölgede")} yangın sıcaklığı gördü.`),
-      el("div", { class: "stats", style: { marginTop: "12px" } },
-        stat(fmt.num(zones.length), "bölge"),
-        stat(fmt.num(detections), "uydu tespiti"),
-        stat(data.data_as_of.latest_observation_at ? agoFrom(data.data_as_of.latest_observation_at) : "-", "son gözlem")),
+    hero.append(
+      el("div", { class: "hero-num" }, el("b", { class: "count", dataset: { to: String(zones.length) } }, fmt.num(zones.length)), el("span", {}, "aktif bölge")),
+      el("p", { class: "hero-text" }, `Son 24 saatte uydular Türkiye'de ${fmt.num(zones.length)} bölgede, toplam ${fmt.num(detections)} yangın sıcaklığı tespiti gördü.`),
+      el("div", { class: "hero-facts" },
+        fact(fmt.num(detections), "tespit"),
+        fact(fmt.num(zones.filter((z) => z.detections > SMALL).length), "belirgin bölge"),
+        fact(`${fmt.num(Math.round(zones.reduce((n, z) => n + z.total_frp_mw, 0)))} MW`, "toplam ısı gücü")),
     );
+    countUp(hero.querySelector(".count"));
     announce(`${zones.length} aktif bölge, ${detections} tespit.`);
   }
 
   function renderList() {
     clear(list);
-    const sorted = [...zones].sort((a, b) => (b.risk?.score ?? -1) - (a.risk?.score ?? -1) || b.detections - a.detections);
+    const sorted = [...zones].sort((a, b) => strength(b) - strength(a));
     const small = sorted.filter((z) => z.detections <= SMALL);
     const visible = showSmall ? sorted : sorted.filter((z) => z.detections > SMALL);
     const shown = visible.length ? visible : sorted.slice(0, 5);
@@ -139,19 +159,20 @@ export function mount(ctx) {
     smallToggle.hidden = !(small.length && visible.length);
     smallToggle.textContent = showSmall ? "Küçük bölgeleri gizle" : `Küçük bölgeleri göster (${small.length})`;
     if (!sorted.length) list.append(el("div", { class: "empty" }, el("h3", {}, "Gösterilecek bölge yok"), el("p", {}, "Yeni bir uydu geçişinde burası güncellenir.")));
-
+    if (selected) select(zones.find((z) => z.id === selected) || { id: null }, false);
   }
 
   function zoneRow(z) {
     const risk = z.risk;
     const drivers = risk?.drivers?.length ? ` · ${risk.drivers.map((d) => FACTORS[d] || d).join(", ")}` : "";
-    const row = el("button", { class: "row", type: "button", role: "listitem", onclick: () => open(z),
-      onpointerenter: () => markers.get(z.id)?.setStyle({ weight: 4 }), onpointerleave: () => markers.get(z.id)?.setStyle({ weight: 2 }) },
-      el("span", { class: "row-title" }, zoneName(z)),
-      el("span", { class: "row-side" }, levelPill(risk && weatherReady ? risk : null, { plain: false }), el("span", { class: "card-sub" }, plural(z.detections, "tespit", "tespit"))),
-      el("span", { class: "row-meta" }, `${agoFrom(z.latest_observation_at)}${weatherReady ? drivers : ""}`),
-    );
-    if (risk && weatherReady) row.append(el("span", { class: "meter", dataset: { level: risk.level }, "aria-hidden": "true" }, el("i", { style: { width: `${Math.max(4, Math.round(risk.score))}%` } })));
+    const heat = el("i", { class: "row-heat", style: { background: heatColor(strength(z)) }, "aria-hidden": "true" });
+    const hover = (on) => markers.get(z.id)?.getElement()?.querySelector(".pin")?.toggleAttribute("data-hover", on);
+    const row = el("div", { class: "row row-split", role: "listitem", dataset: { id: z.id }, onpointerenter: () => hover(true), onpointerleave: () => hover(false) },
+      el("button", { class: "row-main", type: "button", onclick: () => select(z) },
+        el("span", { class: "row-title" }, heat, zoneName(z)),
+        el("span", { class: "row-meta" }, `${plural(z.detections, "tespit", "tespit")} · ${agoFrom(z.latest_observation_at)} · ${fmt.num(Math.round(z.total_frp_mw))} MW${weatherReady ? drivers : ""}`)),
+      el("span", { class: "row-side" }, levelPill(risk && weatherReady ? risk : null, { plain: false })),
+      el("button", { class: "btn btn-ghost btn-icon btn-small", type: "button", "aria-label": `${zoneName(z)} ayrıntılarını aç`, onclick: () => open(z) }, icon("chevron-right", 18)));
     return row;
   }
 
@@ -166,9 +187,9 @@ export function mount(ctx) {
     for (const place of places) {
       const meta = el("span", { class: "row-meta" }, "Kontrol ediliyor…");
       const side = el("span", { class: "row-side" });
-      const open = () => ctx.navigate(`/?lat=${place.lat.toFixed(4)}&lon=${place.lon.toFixed(4)}&r=${place.r || 25}&name=${encodeURIComponent(place.name)}`);
+      const openPlace = () => ctx.navigate(`/?lat=${place.lat.toFixed(4)}&lon=${place.lon.toFixed(4)}&r=${place.r || 25}&name=${encodeURIComponent(place.name)}`);
       const row = el("div", { class: "row row-split", role: "listitem" },
-        el("button", { class: "row-main", type: "button", onclick: open }, el("span", { class: "row-title" }, place.name), meta),
+        el("button", { class: "row-main", type: "button", onclick: openPlace }, el("span", { class: "row-title" }, place.name), meta),
         side,
         el("button", { class: "btn btn-ghost btn-icon btn-small", type: "button", "aria-label": `${place.name} yerlerimden çıkar`, onclick: () => { saved.remove(place.lat, place.lon); loadMine(); } }, icon("x", 18)));
       rows.append(row);
@@ -193,14 +214,13 @@ export function mount(ctx) {
 
   async function loadFeatured() {
     try {
-      const data = await api.events(signal);
-      const top = [...data.events].filter((e) => e.in_turkey).sort((a, b) => b.total_frp_mw - a.total_frp_mw).slice(0, 3);
+      const data = await api.events(signal, { sort: "largest", limit: 3 });
       clear(featured);
-      if (!top.length) {
+      if (!data.events.length) {
         featured.append(el("div", { class: "card empty" }, el("h3", {}, "Henüz kayıtlı yangın yok"), el("p", {}, "Geçmiş veri yüklendiğinde burada görünür.")));
         return;
       }
-      top.forEach((event) => featured.append(eventCard(ctx, event)));
+      data.events.forEach((event) => featured.append(eventCard(ctx, event)));
     } catch (error) {
       if (error.name === "AbortError") return;
       clear(featured).append(el("div", { class: "card empty" }, el("p", {}, "Geçmiş yangınlar yüklenemedi.")));
@@ -208,7 +228,7 @@ export function mount(ctx) {
   }
 }
 
-/** What this site is for, as three things to do. */
+/** What this site is for, as things to do. */
 function tools() {
   const go = (href, ...children) => el("a", { class: "tile", href, "data-link": "" }, ...children);
   return el("div", { class: "tiles" },
@@ -219,14 +239,28 @@ function tools() {
 
 function explainer() {
   return el("details", { class: "card disclosure" },
-    el("summary", {}, icon("info", 18), "Bu liste neyi gösteriyor?", icon("chevron-down", 18)),
+    el("summary", {}, icon("info", 18), "Pinler neyi gösteriyor?", icon("chevron-down", 18)),
     el("div", { class: "body" },
       el("p", {}, el("b", {}, "Bölge: "), "Uydunun son 24 saatte birbirine yakın yerlerde gördüğü sıcak noktaların toplandığı alan. Bir bölge bir yangın olabilir, bir sanayi tesisi de."),
-      el("p", {}, el("b", {}, "Tespit: "), "Uydunun tek bir geçişte gördüğü bir sıcak nokta. Çok tespit, genelde daha büyük ya da uzun süren ateş demektir."),
-      el("p", {}, el("b", {}, "Renk ve kelime: "), `Hava durumundan hesaplanan yangın tehlike endeksi (${Object.values(LEVELS).join(", ").toLowerCase()}). Yangının şu an büyüklüğünü değil, koşulların ne kadar elverişli olduğunu söyler. Deneyseldir.`),
+      el("p", {}, el("b", {}, "Pinin sayısı: "), "Uydunun o bölgede gördüğü sıcak nokta (tespit) sayısı. Çok tespit, genelde daha büyük ya da uzun süren ateş demektir."),
+      el("p", {}, el("b", {}, "Pinin rengi: "), "Uydunun ölçtüğü ısı gücü: sarı hafif, turuncu orta, kırmızı ve koyu kırmızı çok güçlü."),
+      el("p", {}, el("b", {}, "Listedeki etiket: "), "Hava durumundan hesaplanan yangın tehlike endeksi (düşükten aşırıya). Yangının şu anki büyüklüğünü değil, koşulların ne kadar elverişli olduğunu söyler. Deneyseldir."),
       el("p", {}, el("b", {}, "Küçük bölgeler: "), `${SMALL} ya da daha az tespitli bölgeler çoğunlukla tek bir geçişte görülen küçük ateşlerdir; liste kısa kalsın diye gizlenir.`),
     ));
 }
 
-const stat = (value, label) => el("div", { class: "stat" }, el("b", {}, value), el("span", {}, label));
+const fact = (value, label) => el("div", { class: "fact" }, el("b", {}, value), el("span", {}, label));
 const skeleton = (height) => el("div", { class: "skeleton", style: { height: `${height}px` }, "aria-hidden": "true" });
+
+/** The big number counts up once, unless the person asked for less motion. */
+function countUp(node) {
+  const to = Number(node?.dataset.to);
+  if (!node || !Number.isFinite(to) || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const start = performance.now();
+  const step = (now) => {
+    const t = Math.min(1, (now - start) / 700);
+    node.textContent = fmt.num(Math.round(to * (1 - (1 - t) ** 3)));
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}

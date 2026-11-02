@@ -385,11 +385,11 @@ def test_events_ignore_modis_detections(client, session_factory):
 
 
 def test_events_are_cached_until_a_new_detection_arrives(session_factory, monkeypatch):
-    import kivilcim.api as api_module
+    import kivilcim.history as history_module
 
     calls = []
-    real = api_module.find_events
-    monkeypatch.setattr(api_module, "find_events", lambda rows: calls.append(len(rows)) or real(rows))
+    real = history_module.find_events
+    monkeypatch.setattr(history_module, "find_events", lambda rows, **kw: calls.append(len(rows)) or real(rows, **kw))
     client = TestClient(create_app(session_factory, now=lambda: NOW))
     add_event_fire(session_factory)
 

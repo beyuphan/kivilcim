@@ -16,6 +16,7 @@ const SHELL = [
   "/manifest.webmanifest",
   "/static/pwa.js",
   "/static/css/app.css",
+  "/static/css/night.css",
   "/static/js/app.js",
   "/static/js/ui.js",
   "/static/js/icons.js",

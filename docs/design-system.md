@@ -3,6 +3,16 @@
 The front end is plain CSS and ES modules, with no build step. This page records the decisions so a
 change can keep them. Everything lives in `static/css/app.css` and `static/js/`.
 
+## The night look (since 0.9)
+
+One dark scene. `css/app.css` holds the structure and the tokens; `css/night.css` holds the look and is loaded
+after it. The map fills the screen; the top bar and the panel are glass (`--glass`, a blurred dark layer with a
+thin light edge) floating over it. Everything except heat is cool and dark, so a fire is the brightest, warmest
+thing in view: heat uses an amber to crimson ramp (`heatColor` in `map.js`), the only strong accent on the page.
+Pins are real elements (`.pin`) with a number and a glow; they pulse only when the person has not asked for
+reduced motion. Loading is always shown: the map loader pill with a spinner and a sweep, and a fade between
+base layers.
+
 ## Principles
 
 - **Colour has one job each.** Blue is what you can act on; green to dark red is the danger level; gray is

@@ -102,6 +102,7 @@ export function mount(ctx, params) {
         renderer: getCanvas(), radius: 5, weight: 1, color: "#fff", fillOpacity: 0.9, fillColor: timeColor(index / total),
       });
       marker.__day = index;
+      marker.bindTooltip(`${fmt.time(d.acquired_at)}${d.frp != null ? ` · ${fmt.dec(d.frp)} MW` : ""}`, { direction: "top", className: "marker-label" });
       marker.addTo(layer);
       dots.push(marker);
     }

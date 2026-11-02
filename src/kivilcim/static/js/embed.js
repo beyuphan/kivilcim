@@ -2,20 +2,21 @@
 // Everything opens on Kıvılcım itself, in a new tab.
 
 import { api } from "./api.js";
-import { createMap, levelColor, getCanvas, fit, TURKEY } from "./map.js";
-import { fmt, agoFrom } from "./ui.js";
+import { createMap, pin, heatColor, fit, TURKEY } from "./map.js";
+import { el, fmt, agoFrom } from "./ui.js";
 
 const config = JSON.parse(document.getElementById("kv-config")?.textContent || "{}");
 const map = createMap(document.getElementById("map"), config);
 
 api.zones(true).then((data) => {
   const bounds = [];
-  for (const z of data.zones) {
-    const marker = L.circleMarker([z.latitude, z.longitude], {
-      renderer: getCanvas(), radius: 7 + Math.min(12, Math.sqrt(z.detections) * 2), weight: 2, color: "#fff", fillOpacity: 0.85, fillColor: levelColor(z.risk?.level),
+  for (const z of [...data.zones].sort((x, y) => x.total_frp_mw - y.total_frp_mw)) {
+    const size = 28 + Math.min(22, Math.sqrt(z.detections) * 3);
+    const marker = pin([z.latitude, z.longitude], {
+      color: heatColor(z.total_frp_mw), label: String(z.detections), size, title: `${z.district}, ${z.province}: ${z.detections} tespit`,
+      content: el("div", { class: "pop" }, el("b", {}, `${z.district}, ${z.province}`), el("span", { class: "pop-meta" }, `${fmt.num(z.detections)} tespit · ${fmt.dec(z.total_frp_mw)} MW`),
+        el("a", { class: "btn btn-primary btn-small", href: `/?lat=${z.latitude.toFixed(4)}&lon=${z.longitude.toFixed(4)}&r=${Math.ceil(z.radius_km) + 5}&name=${encodeURIComponent(`${z.district}, ${z.province}`)}`, target: "_blank", rel: "noopener" }, "Kıvılcım'da aç")),
     });
-    marker.bindTooltip(`${z.district}, ${z.province} · ${fmt.num(z.detections)} tespit`, { direction: "top", className: "marker-label" });
-    marker.on("click", () => window.open(`/?lat=${z.latitude.toFixed(4)}&lon=${z.longitude.toFixed(4)}&r=${Math.ceil(z.radius_km) + 5}&name=${encodeURIComponent(`${z.district}, ${z.province}`)}`, "_blank", "noopener"));
     marker.addTo(map);
     bounds.push([z.latitude, z.longitude]);
   }
