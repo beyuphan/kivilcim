@@ -92,7 +92,7 @@ bu bölümün görevidir.</p>
 </ul>
 
 <h2>"Yerim yandı mı?" ve yerlerim</h2>
-<p>Herhangi bir yerin, yazdığınız tarihlerden önceki ve sonraki uydu görüntüsünü aynı yöntemle yan yana gösterir. Tarihler, o yerin yaklaşık 15 km çevresinde uydunun gördüğü son güçlü yangına göre önerilir; siz değiştirebilirsiniz. Bu bir hasar tespiti değildir: yanık izi görüntüde sizin gözünüzle değerlendirilir, bulut ya da gölge yanık gibi görünebilir. Tarihler 2016'dan bugüne olmalı ve en fazla 120 gün arayla seçilebilir.</p>
+<p>Herhangi bir yerin, yazdığınız tarihlerden önceki ve sonraki uydu görüntüsünü aynı yöntemle yan yana gösterir. Tarihler, o yerin yaklaşık 15 km çevresinde uydunun arşivde (2016'dan beri) gördüğü güçlü yangınlara göre önerilir: en büyük sekizi tarihleriyle listelenir, birine dokunursunuz; siz de kendi tarihinizi yazabilirsiniz. Bu bir hasar tespiti değildir: yanık izi görüntüde sizin gözünüzle değerlendirilir, bulut ya da gölge yanık gibi görünebilir. Yangın 2016'dan bugüne herhangi bir tarihte olabilir (uydu görüntüleri her yer için o yıllardan var, tespit olmasa da); yalnızca yangının kendisi, başlangıcı ile bitişi arası, en fazla 120 gün sürmüş olmalıdır.</p>
 <p>"Yerlerime ekle" ile kaydettiğiniz yerler yalnızca tarayıcınızda saklanır; sunucuda hesap ya da liste yoktur. Ana sayfa açıldığında her yer için son 24 saatte 10 km içinde tespit olup olmadığı sorulur. Uydu katmanı (Harita/Uydu düğmesi) dünün 250 m çözünürlüklü VIIRS görüntüsünü gösterir: kalın beyaz bulut, ince gri-kahverengi şerit duman olabilir.</p>
 
 <h2>Uydu takvimi: "tespit yok" ne zaman bir şey söyler?</h2>
@@ -109,6 +109,10 @@ bu bölümün görevidir.</p>
 <p>Ana haritanın varsayılan zemini <strong>bulutsuz uydu görüntüsüdür</strong>: Sentinel-2 uydusunun bir yıl boyunca çektiği görüntülerin, bulutlu kısımlar atılarak birleştirildiği bir mozaik (EOX, "Sentinel-2 cloudless", 2024). Bu görüntü yaklaşık bir yıl önceki zemini gösterir, güncel durumu değil; bu yüzden üzerindeki pinler dışında yangın göstermez. Ticari olmayan kullanım için CC BY-NC-SA 4.0 lisanslıdır; bu site reklamsız ve ücretsizdir. Kaynak: Contains modified Copernicus Sentinel data 2024, EOX IT Services GmbH (s2maps.eu).</p>
 <p>"Harita" düğmesi sokak haritasını (OpenStreetMap), "Dünkü" düğmesi ise dünün gerçek günlük uydu görüntüsünü (NASA GIBS, 250 m) gösterir. Dünkü görüntüde bulut vardır: kalın beyaz olan bulut, ince gri-kahverengi şerit duman olabilir; bu seçenek bunu kendiniz ayırt edebilmeniz içindir.</p>
 
+<h2>Yayılma görünümü</h2>
+<p>Bir yangının sayfasında "Yayılma" uydunun gün gün gördüğü alanı gösterir. Uydu yangını yaklaşık 375 m'lik kareler (piksel) olarak görür; her kare, ilk görüldüğü günün rengiyle bir kez çizilir, o günün yeni alanı beyaz parlar. Alan, bu karelerin sayısı çarpı kare alanıdır (0,14 km²). Aynı yeri birden çok uydu görse de bir kez sayılır.</p>
+<p><strong>Bu yanan arazinin ölçümü değildir.</strong> Bir kare, içinde herhangi bir yerde yangın görüldüyse işaretlenir, yani gerçek yanık alan genellikle daha küçüktür; tarama şeridinin kenarındaki pikseller 375 m'den büyüktür ve alanı olduğundan büyük gösterir; yangın görülmeyen kare, yanmadı demek de değildir (bulut, duman, geçişler arası boşluk). Rakam yayılmanın hızını ve yönünü karşılaştırmak içindir, hektar hesabı için değil.</p>
+
 <h2>Geçmiş yangınlar sayfası</h2>
 <p><a href="/history">Geçmiş yangınlar</a> sayfasındaki olaylar, uydu tespitlerinin güç, yer ve zamana göre otomatik gruplanmasıdır; doğrulanmış olaylar değildir.</p>
 <ul>
@@ -117,6 +121,7 @@ bu bölümün görevidir.</p>
   <li>Bir olay en az 45 tespit (üç uydu için), toplam 1500 MW ister ve en fazla 14 gün sürer. Bu eşikler Haziran-Kasım 2026 verisinden seçildi ve geçicidir. Eski yıllarda daha az uydu olduğu için (Suomi NPP 2012'den, NOAA-20 Nisan 2018'den, NOAA-21 Ocak 2023'ten beri) bu iki eşik o günlerin uydu sayısına göre küçültülür: tek uydunun olduğu yıllarda üçte biri, iki uydunun olduğu yıllarda üçte ikisi. 2016'dan bugüne olan olaylar bu şekilde bulunur; son 4 aylık olaylar her yeni veriyle, eskileri bir kez bulunup veritabanında saklanır.</li>
   <li>Olayın kapladığı alanın çapı gösterilir. Çok geniş alana yayılmış olaylar çoğunlukla tarla ve anız yakmasıdır. Orman yangını olup olmadığına otomatik karar
     verilmez, çünkü şekil ve güç ölçüleri ikisini güvenilir biçimde ayırmadı.</li>
+  <li>Arama kutusundan bir il ya da ilçe seçince liste ve harita o yerin yangınlarına süzülür (ilçede 40 km çevresi); sayfadan ayrılmazsınız.</li>
   <li>Yer adları en yakın ilçe merkezine göredir ve yaklaşıktır. Noktalar uydunun gözlem anıdır; yanan alanın sınırı değildir.</li>
 </ul>
 

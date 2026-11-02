@@ -16,6 +16,18 @@ let current = null;
 export function getMap() { return map; }
 export function getCanvas() { return canvas; }
 
+// ---- how far in the map may zoom ---------------------------------------------------------------------
+// Past the detail a picture really has it only turns into blocks, so each picture sets a limit: the cloudless
+// mosaic is sharp to zoom 14, yesterday's daily picture to 10, a 30 m fire image to 13. The lowest limit applies.
+const caps = new Map();
+const BASE_CAP = { map: 17, sat: 14, daily: 10 };
+
+export function setZoomCap(key, value) {
+  if (value == null) caps.delete(key);
+  else caps.set(key, value);
+  if (map) map.setMaxZoom(Math.min(17, ...caps.values()));
+}
+
 // ---- base layers -------------------------------------------------------------------------------------
 
 // A mosaic of the clearest Sentinel-2 pictures of a whole year, with the clouds removed (EOX, s2cloudless).
@@ -41,7 +53,7 @@ export function createMap(element, config) {
     attributionControl: true,
     zoomSnap: 0.5,
     minZoom: 4,
-    maxZoom: 16,
+    maxZoom: 17,
     worldCopyJump: false,
   });
   canvas = L.canvas({ padding: 0.4 });
@@ -50,6 +62,7 @@ export function createMap(element, config) {
   osm = L.tileLayer(config.tileUrl, { maxZoom: 18, attribution: config.tileAttribution, updateWhenIdle: true, keepBuffer: 2, crossOrigin: false });
   cloudless = L.tileLayer(CLOUDLESS, { maxNativeZoom: 14, maxZoom: 18, attribution: CLOUDLESS_CREDIT, updateWhenIdle: true, keepBuffer: 2, crossOrigin: false });
   current = savedBase();
+  setZoomCap("base", BASE_CAP[current]);
   const first = current === "map" ? osm : current === "sat" ? cloudless : cloudless; // "daily" starts on the cloudless one
   first.addTo(map);
   watchLayer(first, "base", current === "map" ? "Harita yükleniyor" : "Uydu görüntüsü yükleniyor");
@@ -62,13 +75,28 @@ export function createMap(element, config) {
  * layer fades in over the old one when its tiles have arrived, so the map never goes blank, and a
  * message with a spinner says it is loading.
  */
-export function addBaseSwitch(wrap) {
+export function addBaseSwitch(wrap, pinLayer) {
   mapwrap = wrap;
   const date = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   const note = el("small", { hidden: true });
   const options = [["sat", "Uydu"], ["map", "Harita"], ["daily", "Dünkü"]];
   const buttons = options.map(([key, text]) => el("button", { type: "button", "aria-pressed": String(key === current), onclick: () => choose(key) }, text));
-  const card = el("div", { class: "map-card map-toggle" }, el("div", { class: "segmented", role: "group", "aria-label": "Harita türü" }, buttons), note);
+  // Pins can be hidden to see the ground under them.
+  let pinsOn = true;
+  try { pinsOn = localStorage.getItem("kv-pins") !== "off"; } catch { /* shown */ }
+  const pinsButton = el("button", { class: "pins-toggle", type: "button", "aria-pressed": String(pinsOn), title: "Yangın pinlerini göster ya da gizle", onclick: () => {
+    pinsOn = !pinsOn;
+    pinsButton.setAttribute("aria-pressed", String(pinsOn));
+    pinsButton.lastChild.textContent = pinsOn ? "Pinler açık" : "Pinler kapalı";
+    showPins();
+    try { localStorage.setItem("kv-pins", pinsOn ? "on" : "off"); } catch { /* not remembered */ }
+  } }, el("i", { "aria-hidden": "true" }), el("span", {}, pinsOn ? "Pinler açık" : "Pinler kapalı"));
+  function showPins() {
+    if (pinsOn) pinLayer?.addTo(map);
+    else if (pinLayer) map.removeLayer(pinLayer);
+  }
+  showPins();
+  const card = el("div", { class: "map-card map-toggle" }, el("div", { class: "segmented", role: "group", "aria-label": "Harita türü" }, buttons), pinsButton, note);
   wrap.append(card);
   describeBase();
 
@@ -89,6 +117,7 @@ export function addBaseSwitch(wrap) {
     const old = layerFor(current);
     const next = layerFor(key);
     current = key;
+    setZoomCap("base", BASE_CAP[key]);
     try { localStorage.setItem("kv-base", key); } catch { /* the choice just is not remembered */ }
     buttons.forEach((b, i) => b.setAttribute("aria-pressed", String(options[i][0] === key)));
     describeBase();

@@ -728,3 +728,39 @@ def test_the_check_page_is_the_app_shell(session_factory):
     client = make_client(session_factory)
     page, home = client.get("/check").text, client.get("/").text
     assert page[page.index("<body>"):] == home[home.index("<body>"):]
+
+
+def add_old_fire(session_factory, day, lat=37.45, lon=35.45, n=6):
+    with session_factory() as s:
+        for i in range(n):
+            s.add(
+                FireDetection(
+                    source="VIIRS_SNPP_SP", satellite="N", instrument="VIIRS", latitude=lat + 0.001 * i, longitude=lon,
+                    acquired_at=datetime(day.year, day.month, day.day, 10, tzinfo=UTC), confidence_raw="n",
+                    confidence_level="nominal", brightness=330.0, frp=20.0 + i, ingested_at=NOW,
+                )
+            )
+        s.commit()
+
+
+def test_every_fire_near_a_place_in_the_whole_archive_is_offered_with_its_dates(session_factory):
+    # Fires years apart: the old "last 120 days" rule would have found none of the early ones.
+    add_old_fire(session_factory, date(2018, 5, 5))
+    add_old_fire(session_factory, date(2021, 7, 28), n=9)
+    add_old_fire(session_factory, date(2021, 7, 29), n=9)
+    add_old_fire(session_factory, date(2021, 8, 2), n=9)  # within five days of the last: the same fire
+    add_old_fire(session_factory, date(2026, 10, 10), n=5)
+    add_old_fire(session_factory, date(2023, 3, 3), n=2)  # too few detections to be called a fire
+    client = TestClient(create_app(session_factory, now=lambda: NOW, settings=Settings(_env_file=None)))
+    body = client.get("/imagery/suggest", params={"lat": 37.46, "lon": 35.46}).json()
+    assert (body["start"], body["end"]) == ("2026-10-10", "2026-10-10")  # the latest
+    starts = [e["start"] for e in body["episodes"]]
+    assert starts == ["2026-10-10", "2021-07-28", "2018-05-05"]  # newest first, the two-detection one left out
+    summer = body["episodes"][1]
+    assert summer["end"] == "2021-08-02" and summer["detections"] == 27 and summer["max_frp_mw"] == 28.0
+
+
+def test_a_big_fire_returns_all_its_detections_not_the_first_few_thousand(session_factory):
+    from kivilcim.api import MAX_EVENT_DETECTIONS
+
+    assert MAX_EVENT_DETECTIONS >= 40000

@@ -3,7 +3,7 @@
 import { api } from "./api.js";
 import { el, clear, fmt, icon } from "./ui.js";
 import { fit, timeColor, pin, TURKEY } from "./map.js";
-import { tileFor, tileUrl } from "./tilemath.js";
+import { tileFor, tileUrl, distanceKm } from "./tilemath.js";
 
 const PAGE = 20;
 
@@ -95,6 +95,7 @@ export function mount(ctx) {
   let events = [];
   let year = "all";
   let sort = "recent";
+  let where = null; // a province or district picked in the search box: only its fires are listed
   let shown = PAGE;
   let markers = new Map();
 
@@ -102,6 +103,7 @@ export function mount(ctx) {
   const list = el("div", { class: "panel-body" });
   const more = el("button", { class: "btn btn-secondary", type: "button", hidden: true, onclick: () => { shown += PAGE; renderList(); } }, "Daha fazla göster");
   const heading = el("p", { class: "lede" });
+  const whereChip = el("div", { class: "chips", hidden: true });
   const sorter = el("div", { class: "segmented", role: "group", "aria-label": "Sıralama" },
     ["recent", "largest"].map((key) => el("button", { type: "button", "aria-pressed": String(key === sort), onclick: () => { sort = key; shown = PAGE; renderSort(); renderList(); } }, key === "recent" ? "En yeni" : "En büyük")));
   const renderSort = () => [...sorter.children].forEach((b, i) => b.setAttribute("aria-pressed", String((i === 0) === (sort === "recent"))));
@@ -109,6 +111,7 @@ export function mount(ctx) {
   body.append(
     el("div", { class: "section-title" }, el("h2", {}, "Geçmiş yangınlar")),
     heading,
+    whereChip,
     years,
     sorter,
     list,
@@ -142,7 +145,29 @@ export function mount(ctx) {
     clear(list).append(el("div", { class: "card empty" }, el("h3", {}, "Liste yüklenemedi"), el("p", {}, "Bağlantınızı kontrol edip sayfayı yenileyin.")));
   });
 
+  // The search box filters the past fires by place instead of leaving for the place's own page.
+  ctx.setPick((entry) => {
+    where = entry;
+    year = "all";
+    shown = PAGE;
+    renderWhere();
+    renderYears();
+    renderList();
+    draw();
+  });
+
+  const inPlace = (e) => !where || (where.kind === "il" ? e.province === where.name : distanceKm(where.lat, where.lon, e.center_lat, e.center_lon) <= 40);
+
+  function renderWhere() {
+    whereChip.hidden = !where;
+    clear(whereChip);
+    if (!where) return;
+    whereChip.append(el("button", { class: "chip", type: "button", "aria-pressed": "true", onclick: () => { where = null; renderWhere(); renderYears(); renderList(); draw(); } },
+      icon("x", 14), where.kind === "il" ? where.name : `${where.name}, ${where.sub}${where.kind === "ilçe" ? " ve çevresi" : ""}`));
+  }
+
   const visible = () => events
+    .filter(inPlace)
     .filter((e) => year === "all" || e.start.startsWith(year))
     .sort(sort === "largest" ? (a, b) => b.total_frp_mw - a.total_frp_mw : (a, b) => (a.start < b.start ? 1 : -1));
 
@@ -150,7 +175,7 @@ export function mount(ctx) {
   function renderYears() {
     clear(years);
     const by = new Map();
-    for (const e of events) {
+    for (const e of events.filter(inPlace)) {
       const y = e.start.slice(0, 4);
       const item = by.get(y) || { count: 0, power: 0 };
       item.count += 1;
@@ -188,7 +213,7 @@ export function mount(ctx) {
     const all = visible();
     heading.textContent = all.length
       ? `${fmt.num(all.length)} yangın kaydı${year === "all" ? "" : `, ${year}`}. Her birinde uydunun yangından önceki ve sonraki görüntüsü var.`
-      : "Bu dönemde kayıtlı yangın yok.";
+      : where ? "Bu bölgede uydunun gördüğü büyük bir yangın kaydı yok. Bir yerin öncesi-sonrası görüntüsüne bakmak için 'Yerim yandı mı?' bölümünü kullanın." : "Bu dönemde kayıtlı yangın yok.";
     all.slice(0, shown).forEach((event, i) => {
       const card = eventCard(ctx, event, { eager: i < 2 });
       card.addEventListener("pointerenter", () => markers.get(event.id)?.getElement()?.querySelector(".pin")?.setAttribute("data-hover", ""));
@@ -202,7 +227,7 @@ export function mount(ctx) {
     layer.clearLayers();
     markers = new Map();
     const all = visible();
-    if (!all.length) return fit(TURKEY, { animate: false });
+    if (!all.length) return where ? fit(L.latLng(where.lat, where.lon).toBounds(60000), { maxZoom: 9 }) : fit(TURKEY, { animate: false });
     const first = Math.min(...events.map((e) => Date.parse(e.start)));
     const last = Math.max(...events.map((e) => Date.parse(e.start)));
     const span = Math.max(1, last - first);

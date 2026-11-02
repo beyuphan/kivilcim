@@ -172,3 +172,21 @@ body > .topbar { position: fixed; }
   .map-loader { inset-block-start: 122px; }
   .hero-num b { font-size: 3rem; }
 }
+
+/* ---- the switch that hides the pins ---- */
+.pins-toggle { display: flex; align-items: center; gap: var(--s-2); min-height: 36px; padding-inline: var(--s-3); border: 0; border-radius: var(--r-md); background: rgb(0 0 0 / 0.3); color: var(--text); font-weight: 600; font-size: var(--fs-sm); cursor: pointer; }
+.pins-toggle i { width: 28px; height: 16px; border-radius: 999px; background: var(--border-strong); position: relative; flex: none; transition: background-color 160ms var(--ease); }
+.pins-toggle i::after { content: ""; position: absolute; inset: 2px auto 2px 2px; width: 12px; border-radius: 50%; background: #fff; transition: transform 160ms var(--ease); }
+.pins-toggle[aria-pressed="true"] i { background: linear-gradient(135deg, #FF8A1F, #FF4D2E); }
+.pins-toggle[aria-pressed="true"] i::after { transform: translateX(12px); }
+
+/* ---- how a fire spread ---- */
+.spread { display: grid; gap: var(--s-3); }
+.spread-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-3); }
+.spread-head small { display: block; color: var(--text-2); font-size: var(--fs-xs); }
+.spread-head b { font-size: var(--fs-lg); letter-spacing: -0.01em; }
+.spread-area { text-align: end; }
+.spread-area b { display: block; font-size: 1.9rem; line-height: 1; font-weight: 800; letter-spacing: -0.03em; background: linear-gradient(180deg, #fff, #FFB27A); -webkit-background-clip: text; background-clip: text; color: transparent; font-variant-numeric: tabular-nums; }
+.spread-chart { width: 100%; height: auto; border-radius: var(--r-md); background: rgb(0 0 0 / 0.25); cursor: pointer; touch-action: manipulation; }
+.spread .controls .btn-primary { flex: none; }
+.spread .hero-facts .fact span { font-size: 11px; }

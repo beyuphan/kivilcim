@@ -42,7 +42,7 @@ export function mount(ctx, params) {
   const form = el("form", { class: "card card-pad form", novalidate: true },
     title, hint,
     el("label", { for: "check-start" }, "Yangın ne zaman başladı?"), start,
-    el("label", { for: "check-end" }, "Ne zaman bitti? (boşsa aynı gün)"), end,
+    el("label", { for: "check-end" }, "Ne zaman bitti? (boşsa aynı gün; yangın en fazla 120 gün sürmüş olabilir)"), end,
     error, go);
   const box = el("div", { class: "card card-pad", hidden: true });
   const noteBox = el("details", { class: "card disclosure", hidden: true });
@@ -62,12 +62,28 @@ export function mount(ctx, params) {
     if (name) title.textContent = name;
   }).catch(() => {});
 
+  // The fires the satellites saw near this place in the whole archive (2016 to today): pick one, or type dates.
   api.suggest(lat, lon, signal).then((s) => {
     if (!s.found) {
-      hint.textContent = "Bu yerin yakınında son 120 günde uydunun gördüğü güçlü bir yangın yok. Yangının tarihini kendiniz girin. Yangın tespitlerini yalnızca yakın zamandan tutuyoruz, uydu görüntüleri ise 2016'dan beri var.";
+      hint.textContent = "Uydular bu yerin yakınında (yaklaşık 15 km) 2016'dan beri güçlü bir yangın görmemiş. Bir yangın olduysa tarihini kendiniz girin: uydu görüntüleri 2016'dan bugüne her yer için var, tespit olmasa da.";
       return;
     }
-    hint.textContent = `Uydu bu yerin yaklaşık 15 km çevresinde ${fmt.range(s.start, s.end)} arasında ${fmt.num(s.detections)} güçlü tespit gördü. Tarihler buna göre dolduruldu; yangın başka bir tarihteyse değiştirin.`;
+    hint.textContent = s.episodes.length > 1
+      ? "Uydunun bu yerin yakınında (yaklaşık 15 km) gördüğü yangınlar aşağıda. Birine dokunun, tarihler dolsun; ya da kendi tarihinizi yazın."
+      : `Uydu bu yerin yaklaşık 15 km çevresinde ${fmt.range(s.start, s.end)} arasında ${fmt.num(s.detections)} güçlü tespit gördü. Tarihler buna göre dolduruldu; yangın başka bir tarihteyse değiştirin.`;
+    if (s.episodes.length > 1) {
+      const chips = el("div", { class: "chips", role: "group", "aria-label": "Bu yerin yakınındaki yangınlar" });
+      for (const e of s.episodes) {
+        const chip = el("button", { class: "chip", type: "button", "aria-pressed": "false", title: `${fmt.num(e.detections)} tespit, en güçlüsü ${fmt.dec(e.max_frp_mw)} MW`, onclick: () => {
+          start.value = e.start;
+          end.value = e.end;
+          chips.querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", String(c === chip)));
+          run();
+        } }, `${fmt.shortDay(e.start)} ${e.start.slice(0, 4)}`);
+        chips.append(chip);
+      }
+      hint.after(chips);
+    }
     if (!start.value) { start.value = s.start; end.value = s.end; }
     if (params.get("auto") !== null || params.get("start")) run();
   }).catch(() => { hint.textContent = "Yangının tarihlerini girin."; });
@@ -80,7 +96,7 @@ export function mount(ctx, params) {
     const problem = !from ? "Başlangıç tarihini girin."
       : from < FIRST || to > today() ? "Tarihler 2016'dan bugüne olmalı."
         : to < from ? "Bitiş tarihi başlangıçtan önce olamaz."
-          : (Date.parse(to) - Date.parse(from)) / DAY > 120 ? "En fazla 120 günlük bir aralık seçin."
+          : (Date.parse(to) - Date.parse(from)) / DAY > 120 ? "Yangın başlangıcıyla bitişi arası en fazla 120 gün olabilir."
             : "";
     error.hidden = !problem;
     error.textContent = problem;

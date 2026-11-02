@@ -75,6 +75,9 @@ It is **not** an alarm: data arrives hours late and some fires never show. It do
   and when a satellite last observed the area. Hours between satellite passes are normal.
 - **Weaker evidence is shown, not hidden.** Low-confidence detections and places that detect almost every
   day (probably a factory, refinery, flare or landfill) are drawn as hollow rings and listed apart.
+- **How a fire spread.** The page of a fire replays the satellite's view day by day: every 375 m pixel in which
+  fire was seen is drawn once, on the day it first appeared, so the area grows on the map, with a chart of the
+  area per day, a player (1x, 2x, 4x) and the fastest day. It counts pixels, not burned land, and says so.
 - **Years of past fires.** The archive reaches back to 2016: the page lists the fires of every year with a bar
   chart to pick a year, sorted newest or biggest first, and every pin on the map opens a card. Old events are
   found once and stored (`scripts/backfill_history.py` loads the detections, `scripts/build_history.py` finds the

@@ -71,7 +71,7 @@ export function createImagePanel(ctx, { box, noteBox, subject = "yangın", card 
       const rejected = imagery?.error?.status === 422;
       box.append(
         el("p", { class: "card-title" }, limited ? "Çok sık istek yapıldı" : rejected ? "Bu tarihler için görüntü aranamaz" : "Uydu görüntüleri şu an alınamadı"),
-        el("p", { class: "card-sub", style: { marginTop: "6px" } }, limited ? "Bir dakika sonra yeniden deneyin." : rejected ? "Tarihler 2016'dan bugüne olmalı, en fazla 120 gün arayla." : "Daha sonra yeniden deneyin."),
+        el("p", { class: "card-sub", style: { marginTop: "6px" } }, limited ? "Bir dakika sonra yeniden deneyin." : rejected ? "Yangın 2016'dan bugüne bir tarihte olmalı ve en fazla 120 gün sürmüş olmalı." : "Daha sonra yeniden deneyin."),
         reload && !rejected ? el("button", { class: "btn btn-secondary btn-small", type: "button", style: { marginTop: "12px" }, onclick: () => start(reload()) }, icon("refresh", 16), "Yeniden dene") : "");
       return;
     }

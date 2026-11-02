@@ -279,12 +279,20 @@ class CoverageResponse(BaseModel):
     note: str
 
 
+class Episode(BaseModel):
+    start: date
+    end: date
+    detections: int
+    max_frp_mw: float
+
+
 class FireSuggestion(BaseModel):
     found: bool
-    start: date | None = None
+    start: date | None = None  # the latest fire near the place
     end: date | None = None
     detections: int = 0
     max_frp_mw: float = 0.0
+    episodes: list[Episode] = []  # the biggest fires seen near the place in the whole archive, newest first
 
 
 TURKEY_MIN_LAT, TURKEY_MAX_LAT = 35.5, 42.5
@@ -304,7 +312,7 @@ IMAGERY_WAITING_SECONDS = 3 * 3600
 IMAGERY_VERSION = 3  # stored choices of an older version are looked for again
 IMAGERY_FAILED_SECONDS = 15 * 60
 
-MAX_EVENT_DETECTIONS = 5000
+MAX_EVENT_DETECTIONS = 40000  # a fire like Manavgat 2021 has 7,000 detections and its neighbors more
 
 
 def event_out(event: Event) -> EventOut:
@@ -1288,7 +1296,7 @@ def create_app(
         """The same picture for a place and dates chosen with the "did it burn" check."""
         end = end or start
         if start < FIRST_IMAGE_DAY or end < start or end > clock().date() or (end - start).days > MAX_CHECK_DAYS:
-            raise HTTPException(status_code=422, detail="The dates must be between 2016 and today, start before end, at most 120 days apart.")
+            raise HTTPException(status_code=422, detail="The fire must lie between 2016 and today, start before end, and last at most 120 days.")
         lat, lon = round(lat, 2), round(lon, 2)
         imagery = imagery_for(session, f"p{lat}_{lon}_{start}_{end}", lat, lon, start, end)
         title = name.strip() or "Yangın öncesi ve sonrası"
@@ -1312,7 +1320,7 @@ def create_app(
         end = end or start
         today = clock().date()
         if start < FIRST_IMAGE_DAY or end < start or end > today or (end - start).days > MAX_CHECK_DAYS:
-            raise HTTPException(status_code=422, detail="The dates must be between 2016 and today, start before end, at most 120 days apart.")
+            raise HTTPException(status_code=422, detail="The fire must lie between 2016 and today, start before end, and last at most 120 days.")
         lat, lon = round(lat, 2), round(lon, 2)  # about 1 km: keeps stored searches shared and places vague
         key = f"p{lat}_{lon}_{start}_{end}"
         payload = imagery_for(session, key, lat, lon, start, end)
@@ -1324,31 +1332,42 @@ def create_app(
         lon: float = Query(ge=TURKEY_MIN_LON, le=TURKEY_MAX_LON),
         session: Session = Depends(get_session),
     ) -> FireSuggestion:
-        """The dates of the latest fire the satellites saw near a place (within about 15 km, strong
-        detections only, last 120 days), to fill in the dates of a check. A gap of five quiet days
-        starts a new fire."""
-        since = clock() - timedelta(days=MAX_CHECK_DAYS)
+        """The fires the satellites saw near a place (within about 15 km, strong detections only) in the whole
+        archive, to fill in the dates of a check: the latest one, and the biggest few with their dates. A gap
+        of five quiet days starts a new fire."""
         rows = session.execute(
             select(FireDetection.acquired_at, FireDetection.frp).where(
                 FireDetection.latitude.between(lat - 0.14, lat + 0.14),
                 FireDetection.longitude.between(lon - 0.18, lon + 0.18),
-                FireDetection.acquired_at >= since,
                 FireDetection.confidence_level != "low",
                 FireDetection.frp >= 5,
             )
         ).all()
-        days = sorted({r.acquired_at.date() for r in rows})
-        if not days:
+        if not rows:
             return FireSuggestion(found=False)
-        start = end = days[-1]
-        for day in reversed(days[:-1]):
-            if (start - day).days > 5:
-                break
-            start = day
-        inside = [r for r in rows if start <= r.acquired_at.date() <= end]
+        by_day: dict[date, list[float]] = {}
+        for r in rows:
+            by_day.setdefault(r.acquired_at.date(), []).append(r.frp)
+        episodes: list[Episode] = []
+        group: list[date] = []
+        for day in sorted(by_day):
+            if group and (day - group[-1]).days > 5:
+                episodes.append(make_episode(group, by_day))
+                group = []
+            group.append(day)
+        episodes.append(make_episode(group, by_day))
+        latest = episodes[-1]
+        big = [e for e in episodes if e.detections >= 4 and (e.end - e.start).days <= MAX_CHECK_DAYS]
+        big = sorted(big, key=lambda e: -e.detections)[:8]
+        big.sort(key=lambda e: e.start, reverse=True)
         return FireSuggestion(
-            found=True, start=start, end=end, detections=len(inside), max_frp_mw=max(r.frp for r in inside)
+            found=True, start=latest.start, end=latest.end, detections=latest.detections,
+            max_frp_mw=latest.max_frp_mw, episodes=big,
         )
+
+    def make_episode(days: list[date], by_day: dict[date, list[float]]) -> Episode:
+        values = [v for d in days for v in by_day[d]]
+        return Episode(start=days[0], end=days[-1], detections=len(values), max_frp_mw=round(max(values), 1))
 
     warm_state = {"running": False}
 

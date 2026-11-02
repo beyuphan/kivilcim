@@ -15,13 +15,16 @@ const sheet = initSheet(panel, $("#sheet-handle"));
 
 createMap($("#map"), config);
 const map = getMap();
-const layer = L.layerGroup().addTo(map);
-addBaseSwitch(mapwrap);
+const layer = L.layerGroup();
+addBaseSwitch(mapwrap, layer);
 
 // ---- search box ------------------------------------------------------------------------------
 
+// A view can take over what happens when a place is picked in the search box (the past fires filter by it).
+let pickHandler = null;
+
 const search = createSearch({
-  onPick: (entry) => navigate(`/?lat=${entry.lat.toFixed(4)}&lon=${entry.lon.toFixed(4)}&r=${entry.radius}&name=${encodeURIComponent(entry.kind === "il" ? entry.name : `${entry.name}, ${entry.sub}`)}`),
+  onPick: (entry) => pickHandler ? pickHandler(entry) : navigate(`/?lat=${entry.lat.toFixed(4)}&lon=${entry.lon.toFixed(4)}&r=${entry.radius}&name=${encodeURIComponent(entry.kind === "il" ? entry.name : `${entry.name}, ${entry.sub}`)}`),
   onLocate: locate,
 });
 $("#search-slot").replaceWith(search.root);
@@ -95,6 +98,7 @@ async function render() {
     signal: controller.signal,
     navigate,
     onCleanup: (fn) => cleanups.push(fn),
+    setPick(fn) { pickHandler = fn; cleanups.push(() => { if (pickHandler === fn) pickHandler = null; }); },
     setTitle(text) {
       document.title = text === "Aktif yangın bölgeleri" ? "Kıvılcım · Türkiye'de uydudan yangın izleme" : `${text} · Kıvılcım`;
       announce(text);

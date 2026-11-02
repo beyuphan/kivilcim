@@ -2,6 +2,7 @@
 // tile layers, so panning and zooming move them together; each is clipped to its side of the line.
 
 import { el, icon, fmt } from "./ui.js";
+import { setZoomCap } from "./map.js";
 
 const QUALITY = { clear: "açık hava", partly_cloudy: "az bulutlu", cloudy: "bulutlu", partial: "kısmi görüntü" };
 
@@ -71,6 +72,9 @@ export function createCompare(map, mapwrap, imagery, { onReady = () => {} } = {}
 
   [before, after].forEach((layer) => { if (layer) { layer.addTo(map); track(layer); } });
   mapwrap.append(overlay);
+  // Zoom no closer than the images are sharp: a 30 m picture is blocks past zoom 13.
+  const natives = [imagery.before, imagery.after].filter(Boolean).map((i) => i.max_native_zoom);
+  setZoomCap("compare", Math.min(...natives) + 1);
   map.on("move zoom resize viewreset", clip);
   clip();
   // The layers' containers exist only after adding; clip once more when the first tiles arrive.
@@ -125,6 +129,7 @@ export function createCompare(map, mapwrap, imagery, { onReady = () => {} } = {}
     destroy() {
       map.off("move zoom resize viewreset", clip);
       map.dragging.enable();
+      setZoomCap("compare", null);
       [before, after].forEach((layer) => layer && map.removeLayer(layer));
       overlay.remove();
     },

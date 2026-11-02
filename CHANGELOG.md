@@ -3,6 +3,26 @@
 All notable changes. The format follows [Keep a Changelog](https://keepachangelog.com/) and the
 project uses [semantic versioning](https://semver.org/).
 
+## [0.10.0] - 2026-11-03
+
+### Changed
+- **The spread of a fire was redone.** Instead of colored dots, the satellite's 375 m pixels are drawn as squares,
+  each once, on the day it was first seen (violet early, yellow late; the day's new area glows white), over the
+  cloud-free picture. The panel shows the area seen so far, the gain of the day, a chart of the area and of the
+  daily growth you can click, a player with 1x/2x/4x, the fastest day and the strongest detection. It plays once
+  on opening. It counts pixels, not burned land, and says so (`static/js/spread.js`).
+- **Searching a place on the past-fires page filters the fires** (a province, or 40 km around a district) and zooms
+  the map there, instead of leaving for the place's own page. A chip clears it; the year bars follow it.
+- **"Did it burn?" suggests fires from the whole archive.** It looked only 120 days back; now it lists the eight
+  biggest fires the satellites saw within 15 km of the place since 2016, with their dates, to pick from. The 120
+  days is only how long a fire may have lasted, and the texts say so.
+- **Zoom stops where the picture stops being sharp:** 14 on the cloudless mosaic, 13 over 30 m fire images, 10 on
+  yesterday's 250 m picture (17 on the street map).
+
+### Added
+- **A switch to hide the pins** (and the dots of a fire) to see the ground under them; remembered.
+- A fire's detail now returns up to 40,000 detections (was 5,000, which cut the later days of a fire like Manavgat).
+
 ## [0.9.0] - 2026-11-03
 
 ### Changed

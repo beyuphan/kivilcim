@@ -30,6 +30,7 @@ const SHELL = [
   "/static/js/history.js",
   "/static/js/event.js",
   "/static/js/compare.js",
+  "/static/js/spread.js",
   "/static/js/imagepanel.js",
   "/static/js/saved.js",
   "/static/js/wind.js",
