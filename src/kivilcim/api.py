@@ -3,6 +3,7 @@
 Start with: uvicorn kivilcim.api:create_app --factory
 """
 
+import json
 import logging
 import threading
 from collections.abc import AsyncIterator, Callable, Iterator
@@ -13,7 +14,9 @@ from typing import Literal
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -26,12 +29,15 @@ from kivilcim.events import Event, find_events
 from kivilcim.fixed import cell_of, find_fixed_cells
 from kivilcim.geo import bounding_box, haversine_km
 from kivilcim.models import FireDetection, IngestRun, WeatherSnapshot
+from kivilcim.ratelimit import RateLimitMiddleware
 from kivilcim.risk import compute_risk
 from kivilcim.scheduler import IngestScheduler, make_ingest_job
+from kivilcim.security import SecurityHeadersMiddleware, build_csp
 from kivilcim.weather import (
     ATTRIBUTION,
     CacheStatus,
     WeatherUnavailable,
+    calls_today,
     get_weather,
     get_weather_many,
     round_coordinate,
@@ -83,6 +89,8 @@ class StatusResponse(BaseModel):
     data_as_of: DataAsOf
     sources: list[SourceStatus]
     ingest_interval_minutes: int | None  # None when this process does not run its own timer
+    weather_calls_today: int  # calls made to the weather provider today (UTC), counted per point
+    weather_daily_quota: int  # the self-imposed daily limit; at the limit only cached weather is served
     disclaimer: str
 
 
@@ -385,9 +393,24 @@ def create_app(
 
     app = FastAPI(
         title="Kıvılcım",
-        description=f"Wildfire detections from NASA FIRMS satellite data. {DISCLAIMER}",
+        version=__version__,
+        description=(
+            "Wildfire detections from NASA FIRMS satellite data, with the weather at active fires. "
+            f"{DISCLAIMER} Read-only and free; the weather values come from Open-Meteo.com (CC BY 4.0), "
+            "which is free for non-commercial use only."
+        ),
         lifespan=lifespan,
     )
+    # Added innermost first: a rejected request still gets the CORS and security headers.
+    app.add_middleware(
+        RateLimitMiddleware,
+        general_per_minute=settings.rate_limit_per_minute,
+        weather_per_minute=settings.rate_limit_weather_per_minute,
+        trust_proxy=settings.trust_proxy,
+    )
+    app.add_middleware(CORSMiddleware, allow_origins=settings.cors_list, allow_methods=["GET"], allow_headers=[])
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
+    app.add_middleware(SecurityHeadersMiddleware, csp=build_csp(settings.tile_url))
 
     def current_weather(session: Session, lat: float, lon: float):
         try:
@@ -407,9 +430,22 @@ def create_app(
         with session_factory() as session:
             yield session
 
+    def render_page(name: str) -> HTMLResponse:
+        """A page from the static folder with the map settings filled in. The values go in as JSON
+        string literals, so a quote in a setting cannot end the string, and "</" is escaped so a
+        value cannot close the script element either."""
+
+        def literal(value: str) -> str:
+            return json.dumps(value).replace("</", "<\\/")
+
+        html = (STATIC_DIR / name).read_text(encoding="utf-8")
+        html = html.replace("__TILE_URL__", literal(settings.tile_url))
+        html = html.replace("__TILE_ATTRIBUTION__", literal(settings.tile_attribution))
+        return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+
     @app.get("/", include_in_schema=False)
-    def index() -> FileResponse:
-        return FileResponse(STATIC_DIR / "index.html")
+    def index() -> HTMLResponse:
+        return render_page("index.html")
 
     @app.get("/manifest.webmanifest", include_in_schema=False)
     def manifest() -> FileResponse:
@@ -427,12 +463,12 @@ def create_app(
         )
 
     @app.get("/history", include_in_schema=False)
-    def history() -> FileResponse:
-        return FileResponse(STATIC_DIR / "history.html")
+    def history() -> HTMLResponse:
+        return render_page("history.html")
 
     @app.get("/methodology", include_in_schema=False)
-    def methodology() -> FileResponse:
-        return FileResponse(STATIC_DIR / "methodology.html")
+    def methodology() -> HTMLResponse:
+        return render_page("methodology.html")
 
     @app.get("/health")
     def health() -> dict[str, str]:
@@ -445,6 +481,8 @@ def create_app(
             data_as_of=data_as_of(session, current),
             sources=source_statuses(session, current),
             ingest_interval_minutes=ingest_every,
+            weather_calls_today=calls_today(session, current),
+            weather_daily_quota=settings.open_meteo_daily_quota,
             disclaimer=DISCLAIMER,
         )
 
@@ -518,6 +556,7 @@ def create_app(
 
     @app.get("/risk/zones", response_model=ZonesResponse)
     def risk_zones(
+        response: Response,
         since_hours: int = Query(default=24, ge=1, le=72),
         session: Session = Depends(get_session),
     ) -> ZonesResponse:
@@ -526,6 +565,7 @@ def create_app(
         Weather for all zones is fetched in one request (and cached), strongest zones first, so
         if the daily call quota runs short it is the weakest zones that go without a value.
         """
+        response.headers["Cache-Control"] = "public, max-age=60"  # one minute, so shared caches can help
         current = clock()
         rows = session.scalars(
             select(FireDetection).where(FireDetection.acquired_at >= current - timedelta(hours=since_hours))
@@ -648,12 +688,14 @@ def create_app(
 
     @app.get("/events", response_model=EventsResponse)
     def events(
+        response: Response,
         turkey_only: bool = True,
         since: date | None = None,
         until: date | None = None,
         limit: int = Query(default=50, ge=1, le=200),
         session: Session = Depends(get_session),
     ) -> EventsResponse:
+        response.headers["Cache-Control"] = "public, max-age=60"
         found = [
             e
             for e in all_events(session)

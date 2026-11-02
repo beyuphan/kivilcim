@@ -117,8 +117,9 @@ bu bölümün görevidir.</p>
 
 <h2>Gizlilik</h2>
 <p>Hesap, çerez ve izleme yoktur. Bir konum seçtiğinizde ya da "Konumumu kullan"ı tıkladığınızda koordinatlar yalnızca o sorguyu yanıtlamak için sunucuya gönderilir ve
-hava servisine ~11 km'ye yuvarlanmış olarak iletilir; veritabanında kullanıcıya ait bir kayıt tutulmaz. Sunucu günlükleri istek adreslerini (koordinatlar dahil)
-tutabilir; kendi sunucunuzu çalıştırırsanız bunlar sizde kalır.</p>
+hava servisine ~11 km'ye yuvarlanmış olarak iletilir; veritabanında kullanıcıya ait bir kayıt tutulmaz. İstek adreslerinde koordinatlar geçtiği için
+<code>python -m kivilcim</code> varsayılan olarak istek günlüğü tutmaz (<code>--access-log</code> ile açılır). Bir ters vekil sunucunun ya da barındırma
+hizmetinin kendi günlükleri ayrıca koordinat içerebilir; kendi sunucunuzu çalıştırırsanız bunlar sizde kalır.</p>
 
 <h2>Bilinen sınırlar</h2>
 <ul>

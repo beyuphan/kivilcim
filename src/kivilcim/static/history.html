@@ -164,7 +164,8 @@ function colorFor(t) {
 
 const canvas = L.canvas({ padding: 0.5 });
 const map = L.map("map", { preferCanvas: true }).setView([39, 35], 6);
-L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18, attribution: "© OpenStreetMap" }).addTo(map);
+// The server fills these in from its settings (TILE_URL, TILE_ATTRIBUTION).
+L.tileLayer(__TILE_URL__, { maxZoom: 18, attribution: __TILE_ATTRIBUTION__ }).addTo(map);
 const overview = L.layerGroup().addTo(map);
 const spread = L.layerGroup().addTo(map);
 

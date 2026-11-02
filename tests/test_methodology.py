@@ -93,6 +93,7 @@ def test_it_says_what_the_site_does_not_do(page):
     assert "yangın olasılığı" in page and "güvenli olduğunu söylemez" in page
     assert "ev yangını" in page  # small fires are not seen
     assert "Gizlilik" in page and "çerez" in page
+    assert "varsayılan olarak istek günlüğü tutmaz" in page and "--access-log" in page
 
 
 def test_the_validation_section_reads_its_results_from_a_file(page):

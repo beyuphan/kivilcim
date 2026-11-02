@@ -19,6 +19,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--host", default="127.0.0.1", help="address to listen on (default 127.0.0.1; use 0.0.0.0 to share)")
     parser.add_argument("--port", type=int, default=8000, help="port to listen on (default 8000)")
     parser.add_argument("--no-ingest", action="store_true", help="serve the stored data only; do not fetch new detections")
+    parser.add_argument(
+        "--access-log",
+        action="store_true",
+        help="log every request. Off by default: request addresses contain the coordinates people look up",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -27,7 +32,7 @@ def main(argv: list[str] | None = None) -> int:
     shown = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
     # ASCII only: some console code pages cannot print the dotless i and would crash the start.
     print(f"Kivilcim is running at http://{shown}:{args.port}/   (stop with Ctrl+C)")
-    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+    uvicorn.run(app, host=args.host, port=args.port, log_level="info", access_log=args.access_log)
     return 0
 
 

@@ -155,8 +155,9 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
-const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-const TILE_ATTRIBUTION = "© OpenStreetMap";
+// The server fills these in from its settings (TILE_URL, TILE_ATTRIBUTION).
+const TILE_URL = __TILE_URL__;
+const TILE_ATTRIBUTION = __TILE_ATTRIBUTION__;
 const SATELLITES = { N: "Suomi NPP", N20: "NOAA-20", N21: "NOAA-21", Terra: "Terra", Aqua: "Aqua" };
 const CONF_LABEL = { high: "yüksek", nominal: "orta", low: "düşük" };
 const CONF_COLOR = { high: "#b91c1c", nominal: "#ea580c", low: "#6b7280" };

@@ -19,10 +19,28 @@ class Settings(BaseSettings):
     # satellites pass; 30 is plenty. 0 turns the timer off.
     ingest_interval_minutes: int = 30
 
+    # Requests per minute per client; 0 turns a limit off. The weather limit is stricter because
+    # those requests can make the server call Open-Meteo, whose free tier has a daily quota.
+    rate_limit_per_minute: int = 120
+    rate_limit_weather_per_minute: int = 30
+    # Behind a reverse proxy, take the client address from X-Forwarded-For. Only turn this on when
+    # a proxy you control sets that header; otherwise a client could pick its own address.
+    trust_proxy: bool = False
+    # Browsers may call the read-only API from other sites. A comma-separated list, or * for any.
+    cors_origins: str = "*"
+    # The map. OpenStreetMap's public tile servers are meant for light use; for a busy public site
+    # use a tile provider and set its URL template here (with its attribution text).
+    tile_url: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    tile_attribution: str = "© OpenStreetMap"
+
     # Open-Meteo's free tier allows 10,000 calls per day. This is a call count, not money:
     # the service stops asking and serves cached weather before reaching that limit.
     open_meteo_daily_quota: int = 7000
     weather_cache_minutes: int = 45
+
+    @property
+    def cors_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     @property
     def source_list(self) -> list[str]:

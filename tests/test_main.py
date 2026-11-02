@@ -8,14 +8,23 @@ def test_help_lists_the_options(capsys):
         entry.main(["--help"])
     assert exc.value.code == 0
     out = capsys.readouterr().out
-    for option in ("--host", "--port", "--no-ingest"):
+    for option in ("--host", "--port", "--no-ingest", "--access-log"):
         assert option in out
+
+
+def test_requests_are_not_logged_unless_asked(monkeypatch):
+    seen = []
+    monkeypatch.setattr(entry.uvicorn, "run", lambda app, **kw: seen.append(kw["access_log"]))
+    monkeypatch.setattr(entry, "create_app", lambda **kw: object())
+    entry.main([])
+    entry.main(["--access-log"])
+    assert seen == [False, True]  # addresses carry the coordinates people look up
 
 
 def test_main_starts_the_server_with_the_timer_unless_told_not_to(monkeypatch):
     started = {}
 
-    def fake_run(app, host, port, log_level):
+    def fake_run(app, host, port, log_level, access_log):
         started.update(host=host, port=port)
 
     monkeypatch.setattr(entry.uvicorn, "run", fake_run)
