@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import httpx
 import pytest
@@ -73,24 +74,25 @@ def test_health(client):
     assert response.json() == {"status": "ok"}
 
 
-def test_index_page_is_served_with_the_disclaimer(client):
+def test_the_app_shell_is_served_with_the_disclaimer(client):
     response = client.get("/")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
-    assert "Resmi bir uyarı sistemi değildir" in response.text
+    assert "resmi bir uyarı sistemi değildir" in response.text
     assert "112" in response.text
     assert "AFAD" in response.text
 
 
-def test_history_page_is_served_with_the_disclaimer(client):
-    response = client.get("/history")
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("text/html")
-    assert "Resmi bir kayıt değildir" in response.text
-    assert "doğrulanmış olaylar değildir" in response.text
-    assert "112" in response.text and "AFAD" in response.text
-    # The page draws the spread from detections only; it must not pull satellite imagery tiles.
-    assert "gibs.earthdata.nasa.gov" not in response.text
+def test_the_history_routes_serve_the_same_app_shell(client):
+    shell = client.get("/").text
+    for path in ("/history", "/history/2026-07-01_36.5_30.1"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/html")
+        assert response.text == shell
+    # The past-fires text is written in the script, since the pages are built in the browser.
+    script = (Path(__file__).parent.parent / "src" / "kivilcim" / "static" / "js" / "history.js").read_text(encoding="utf-8")
+    assert "Resmi bir kayıt değildir" in script and "doğrulanmış olaylar değildir" in script
 
 
 def test_index_links_to_the_history_page(client):
@@ -707,3 +709,28 @@ def test_source_that_never_succeeded_makes_freshness_unknown(client, session_fac
     data = client.get("/status").json()["data_as_of"]
     assert data["freshness"] == "unknown"
     assert data["last_ingest_at"] is None
+
+
+@respx.mock
+def test_zones_can_be_asked_for_without_the_weather(session_factory):
+    route = respx.route(**OPEN_METEO).mock(side_effect=batch_response)
+    add_zone_fire(session_factory, 39.9, 32.85, frp=30.0)
+    body = weather_client(session_factory).get("/risk/zones", params={"weather": "false"}).json()
+
+    assert route.call_count == 0
+    (zone,) = body["zones"]
+    assert zone["province"] == "Ankara" and zone["detections"] == 1
+    assert zone["risk"] is None and zone["weather"] is None
+
+
+@respx.mock
+def test_warming_the_weather_makes_the_next_zones_request_free(session_factory):
+    route = respx.route(**OPEN_METEO).mock(side_effect=batch_response)
+    add_zone_fire(session_factory, 39.9, 32.85, frp=30.0)
+    client = weather_client(session_factory)
+    client.app.state.warm_weather()
+    assert route.call_count == 1
+
+    body = client.get("/risk/zones").json()
+    assert route.call_count == 1  # served from what was fetched ahead of time
+    assert body["zones"][0]["risk"]["level"] == "extreme"

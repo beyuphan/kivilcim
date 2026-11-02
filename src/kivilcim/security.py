@@ -6,8 +6,6 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
-# The map library is loaded from this host (with a pinned version and an integrity hash).
-SCRIPT_HOST = "https://unpkg.com"
 # Satellite image tiles for the before and after view.
 IMAGERY_HOST = "https://gibs.earthdata.nasa.gov"
 # The generated API documentation loads its own assets, so it gets no page policy.
@@ -29,15 +27,15 @@ def tile_origin(tile_url: str) -> str:
 
 
 def build_csp(tile_url: str) -> str:
-    """The pages use small inline scripts and styles, so those are allowed, but every other
-    source is limited to this site, the map library host and the map tile host."""
+    """Scripts and the map library come from this site only. Styles may be inline (the map library
+    sets some), images may also come from the map tile host and the satellite imagery host."""
     tiles = tile_origin(tile_url)
-    img = " ".join(filter(None, ["'self'", "data:", "blob:", SCRIPT_HOST, IMAGERY_HOST, tiles]))
+    img = " ".join(filter(None, ["'self'", "data:", "blob:", IMAGERY_HOST, tiles]))
     return "; ".join(
         [
             "default-src 'self'",
-            f"script-src 'self' 'unsafe-inline' {SCRIPT_HOST}",
-            f"style-src 'self' 'unsafe-inline' {SCRIPT_HOST}",
+            "script-src 'self'",
+            "style-src 'self' 'unsafe-inline'",
             f"img-src {img}",
             "connect-src 'self'",
             "worker-src 'self'",

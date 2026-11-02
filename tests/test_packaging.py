@@ -20,6 +20,6 @@ def test_every_static_file_is_listed_in_the_package_data():
 
 
 def test_the_pages_and_icons_the_site_needs_exist():
-    for name in ("index.html", "history.html", "methodology.html", "sw.js", "pwa.js", "manifest.webmanifest", "ilceler.json"):
+    for name in ("index.html", "methodology.html", "css/app.css", "js/app.js", "vendor/leaflet/leaflet.js", "sw.js", "pwa.js", "manifest.webmanifest", "ilceler.json"):
         assert (STATIC / name).is_file(), name
     assert len(list((STATIC / "icons").glob("*.png"))) >= 5

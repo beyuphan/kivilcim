@@ -148,3 +148,21 @@ def test_the_job_uses_the_default_window_when_up_to_date(tmp_path):
     with httpx.Client() as client:
         make_ingest_job(factory, settings, client)()
     assert route.calls[0].request.url.path.endswith("/2")
+
+
+@respx.mock
+def test_the_step_after_the_ingest_runs_once_and_its_failure_is_harmless(tmp_path):
+    engine = make_engine(f"sqlite:///{tmp_path / 'a.db'}")
+    init_db(engine)
+    factory = make_session_factory(engine)
+    settings = Settings(_env_file=None, firms_map_key=KEY, firms_sources="VIIRS_SNPP_NRT")
+    respx.route(host="firms.modaps.eosdis.nasa.gov").respond(200, text=CSV)
+    calls = []
+
+    def after():
+        calls.append(1)
+        raise RuntimeError("boom")
+
+    with httpx.Client() as client:
+        make_ingest_job(factory, settings, client, after=after)()  # must not raise
+    assert calls == [1]

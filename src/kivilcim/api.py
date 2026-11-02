@@ -381,6 +381,21 @@ def data_as_of(session: Session, now: datetime) -> DataAsOf:
     )
 
 
+class AssetFiles(StaticFiles):
+    """Static files with cache headers: the map library and icons never change under the same name, so
+    they are kept for a week; everything else is checked with the server each time (a short 304
+    answer when unchanged), so a new release shows at once."""
+
+    LONG_LIVED = ("vendor/", "icons/")
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code in (200, 304):
+            long_lived = path.replace("\\", "/").startswith(self.LONG_LIVED)
+            response.headers["Cache-Control"] = "public, max-age=604800" if long_lived else "no-cache"
+        return response
+
+
 def create_app(
     session_factory: sessionmaker[Session] | None = None,
     now: Callable[[], datetime] | None = None,
@@ -412,7 +427,7 @@ def create_app(
         if ingest_every:
             ingest_client = httpx.Client(timeout=60)
             scheduler = IngestScheduler(
-                make_ingest_job(session_factory, settings, ingest_client), ingest_every * 60
+                make_ingest_job(session_factory, settings, ingest_client, after=warm_weather), ingest_every * 60
             )
             scheduler.start()
             log.info("automatic ingest started: every %d minutes", ingest_every)
@@ -464,19 +479,40 @@ def create_app(
         with session_factory() as session:
             yield session
 
+    def active_zones(session: Session, current: datetime, since_hours: int) -> list:
+        rows = session.scalars(
+            select(FireDetection).where(FireDetection.acquired_at >= current - timedelta(hours=since_hours))
+        ).all()
+        return find_zones(rows, fixed_cells(session))
+
+    def warm_weather() -> None:
+        """Fetch the weather for the current zones ahead of time, so the first visitor after an update
+        does not wait for it. Readings older than 20 minutes are refreshed, which keeps them fresh
+        across a 30 minute update cycle."""
+        with session_factory() as session:
+            current = clock()
+            zones = active_zones(session, current, 24)
+            get_weather_many(
+                session, weather_client, [(z.center_lat, z.center_lon) for z in zones], current, 20,
+                settings.open_meteo_daily_quota,
+            )
+
     def render_page(name: str) -> HTMLResponse:
-        """A page from the static folder with the map settings filled in. The values go in as JSON
-        string literals, so a quote in a setting cannot end the string, and "</" is escaped so a
-        value cannot close the script element either."""
+        """A page from the static folder with the site's settings filled in.
 
-        def literal(value: str) -> str:
-            return json.dumps(value).replace("</", "<\\/")
-
+        The settings go into a JSON block that the page's script reads (a block of type
+        application/json is data, not script, so the content security policy does not mind it).
+        "</" is escaped so no value can close the element, whatever it contains.
+        """
+        config = json.dumps(
+            {"tileUrl": settings.tile_url, "tileAttribution": settings.tile_attribution, "version": __version__}
+        ).replace("</", "<\\/")
         html = (STATIC_DIR / name).read_text(encoding="utf-8")
-        html = html.replace("__TILE_URL__", literal(settings.tile_url))
-        html = html.replace("__TILE_ATTRIBUTION__", literal(settings.tile_attribution))
+        html = html.replace("__CONFIG__", config).replace("__VERSION__", __version__)
         return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
+    # One page, several addresses: the map, the past fires and one fire all open the same app, which
+    # reads the address itself. Moving between them in the page never reloads the map.
     @app.get("/", include_in_schema=False)
     def index() -> HTMLResponse:
         return render_page("index.html")
@@ -497,8 +533,9 @@ def create_app(
         )
 
     @app.get("/history", include_in_schema=False)
-    def history() -> HTMLResponse:
-        return render_page("history.html")
+    @app.get("/history/{event_id}", include_in_schema=False)
+    def history(event_id: str | None = None) -> HTMLResponse:
+        return render_page("index.html")
 
     @app.get("/methodology", include_in_schema=False)
     def methodology() -> HTMLResponse:
@@ -592,26 +629,30 @@ def create_app(
     def risk_zones(
         response: Response,
         since_hours: int = Query(default=24, ge=1, le=72),
+        weather: bool = Query(default=True, description="Add the weather index. false answers at once from stored detections."),
         session: Session = Depends(get_session),
     ) -> ZonesResponse:
         """Active fire zones across Turkey, each with the weather index at its center.
 
         Weather for all zones is fetched in one request (and cached), strongest zones first, so
-        if the daily call quota runs short it is the weakest zones that go without a value.
+        if the daily call quota runs short it is the weakest zones that go without a value. With
+        `weather=false` nothing is fetched and every zone has `risk` and `weather` empty; a page can
+        draw the zones from that at once and add the colors when the full answer arrives.
         """
         response.headers["Cache-Control"] = "public, max-age=60"  # one minute, so shared caches can help
         current = clock()
-        rows = session.scalars(
-            select(FireDetection).where(FireDetection.acquired_at >= current - timedelta(hours=since_hours))
-        ).all()
-        zones = find_zones(rows, fixed_cells(session))
-        weather_by_point = get_weather_many(
-            session,
-            weather_client,
-            [(z.center_lat, z.center_lon) for z in zones],
-            current,
-            settings.weather_cache_minutes,
-            settings.open_meteo_daily_quota,
+        zones = active_zones(session, current, since_hours)
+        weather_by_point = (
+            get_weather_many(
+                session,
+                weather_client,
+                [(z.center_lat, z.center_lon) for z in zones],
+                current,
+                settings.weather_cache_minutes,
+                settings.open_meteo_daily_quota,
+            )
+            if weather
+            else {}
         )
 
         out = []
@@ -843,7 +884,8 @@ def create_app(
             disclaimer=DISCLAIMER,
         )
 
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    app.state.warm_weather = warm_weather  # also lets tests and tools call it
+    app.mount("/static", AssetFiles(directory=STATIC_DIR), name="static")
     return app
 
 

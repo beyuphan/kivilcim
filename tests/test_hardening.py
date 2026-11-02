@@ -1,3 +1,5 @@
+import json
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -310,3 +312,52 @@ def test_status_reports_the_weather_calls_used_today(session_factory):
     client.get("/weather", params={"lat": 39.9, "lon": 32.9})
     status = client.get("/status").json()
     assert status["weather_calls_today"] == 1 and status["weather_daily_quota"] == 50
+
+
+# ---- the app shell and its files --------------------------------------------
+
+
+def test_the_shell_fills_in_the_version_and_the_map_settings_as_data(session_factory):
+    from kivilcim import __version__
+
+    html = make_client(session_factory).get("/").text
+    assert "__VERSION__" not in html and "__CONFIG__" not in html
+    assert f"/static/js/app.js?v={__version__}" in html
+    start = html.index('id="kv-config">') + len('id="kv-config">')
+    config = json.loads(html[start : html.index("</script>", start)])
+    assert config["tileUrl"].startswith("https://") and config["version"] == __version__
+
+
+def test_pages_allow_only_scripts_from_this_site(session_factory):
+    client = make_client(session_factory)
+    for path in ("/", "/history", "/history/x", "/methodology"):
+        csp = client.get(path).headers["content-security-policy"]
+        script_src = next(part for part in csp.split("; ") if part.startswith("script-src"))
+        assert script_src == "script-src 'self'", path
+        assert "unpkg.com" not in csp
+
+
+def test_pages_have_no_inline_scripts_and_load_nothing_from_other_hosts(session_factory):
+    client = make_client(session_factory)
+    for path in ("/", "/methodology"):
+        html = client.get(path).text
+        for tag in re.findall(r"<script\b[^>]*>", html):
+            assert "src=" in tag or 'type="application/json"' in tag, tag
+        assert "unpkg.com" not in html and "cdn" not in html.lower()
+
+
+def test_vendored_and_icon_files_are_cached_for_long_and_the_rest_must_be_checked(session_factory):
+    client = make_client(session_factory)
+    assert "max-age=604800" in client.get("/static/vendor/leaflet/leaflet.js").headers["cache-control"]
+    assert "max-age=604800" in client.get("/static/icons/icon-192.png").headers["cache-control"]
+    for path in ("/static/css/app.css", "/static/js/app.js", "/static/ilceler.json"):
+        assert client.get(path).headers["cache-control"] == "no-cache", path
+
+
+def test_every_module_the_app_imports_exists(session_factory):
+    client = make_client(session_factory)
+    js = STATIC / "js"
+    for file in js.glob("*.js"):
+        for name in re.findall(r'from "\./([\w-]+\.js)"', file.read_text(encoding="utf-8")):
+            assert (js / name).is_file(), f"{file.name} imports {name}"
+            assert client.get(f"/static/js/{name}").status_code == 200

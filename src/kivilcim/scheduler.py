@@ -80,9 +80,16 @@ def last_successes(session: Session, sources: Sequence[str]) -> list[datetime | 
 
 
 def make_ingest_job(
-    session_factory: sessionmaker[Session], settings: Settings, client: httpx.Client
+    session_factory: sessionmaker[Session],
+    settings: Settings,
+    client: httpx.Client,
+    after: Callable[[], None] | None = None,
 ) -> Callable[[], None]:
-    """A job that ingests every configured source, widening the window after downtime."""
+    """A job that ingests every configured source, widening the window after downtime.
+
+    `after` runs once the sources are done, for work that should follow fresh data, such as
+    fetching weather for the new zones. A failure in it is logged and does not fail the job.
+    """
 
     def job() -> None:
         now = datetime.now(timezone.utc)
@@ -100,5 +107,10 @@ def make_ingest_job(
                 log.info("%s: %d new detections", run.source, run.record_count)
             else:
                 log.warning("%s: failed (%s)", run.source, run.error)
+        if after:
+            try:
+                after()
+            except Exception:  # noqa: BLE001 - a follow-up task must not turn a good ingest into a failure
+                log.exception("the step after the ingest failed")
 
     return job

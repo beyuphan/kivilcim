@@ -1,5 +1,7 @@
 """The methodology page states numbers that also live in the code. These tests keep them in step."""
 
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -97,4 +99,6 @@ def test_it_says_what_the_site_does_not_do(page):
 
 
 def test_the_validation_section_reads_its_results_from_a_file(page):
-    assert "/static/validation.json" in page
+    script = (Path(__file__).parent.parent / "src" / "kivilcim" / "static" / "js" / "methodology.js").read_text(encoding="utf-8")
+    assert "/static/validation.json" in script
+    assert 'src="/static/js/methodology.js' in page
