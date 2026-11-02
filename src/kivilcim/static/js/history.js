@@ -207,9 +207,9 @@ export function mount(ctx) {
     const last = Math.max(...events.map((e) => Date.parse(e.start)));
     const span = Math.max(1, last - first);
     for (const e of [...all].sort((a, b) => a.total_frp_mw - b.total_frp_mw)) {
-      const size = 26 + Math.min(26, Math.sqrt(e.total_frp_mw) / 3);
+      const size = 20 + Math.min(26, Math.sqrt(e.total_frp_mw) / 6);
       const marker = pin([e.center_lat, e.center_lon], {
-        color: timeColor((Date.parse(e.start) - first) / span), label: e.start.slice(2, 4), size, pulse: false,
+        color: timeColor((Date.parse(e.start) - first) / span), label: size >= 28 ? e.start.slice(2, 4) : "", size, pulse: false,
         title: `${eventName(e)}, ${fmt.shortDay(e.start)} ${e.start.slice(0, 4)}`,
         content: el("div", { class: "pop" },
           el("b", {}, eventName(e)),

@@ -30,6 +30,7 @@ project uses [semantic versioning](https://semver.org/).
   up to 500 results.
 
 ### Fixed
+- A place counts as inside Turkey up to 33 km from a district center (was 30), so forest fires on peninsulas such as Marmaris are no longer left out of the past-fires list; Syria and Iraq begin beyond that.
 - Fixed-source detection reads the last year of detections instead of all of them, so it stays fast as the
   database grows; SQLite waits up to a minute for another writer.
 

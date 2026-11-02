@@ -25,7 +25,7 @@ EXPECTED_PROVINCES = 81
 STATIC_JSON = Path(__file__).parent / "static" / "ilceler.json"
 # A point farther than this from every district center is treated as outside Turkey. The
 # FIRMS box around Turkey also covers parts of Iraq, Syria, Iran, Georgia and Greece.
-INSIDE_TURKEY_KM = 30.0
+INSIDE_TURKEY_KM = 33.0  # forest fires on peninsulas (Marmaris, Aydıncık) are 30-33 km from a center; Syria and Iraq start beyond
 
 
 @lru_cache(maxsize=1)
