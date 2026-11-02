@@ -174,6 +174,7 @@ function popupFor(f) {
     ["Güven", CONF_LABEL[f.confidence_level] || f.confidence_level],
     ["Mesafe", f.distance_km.toFixed(1) + " km"],
   ];
+  if (f.recurring) rows.push(["Not", "Burası neredeyse her gün tespit veriyor; fabrika, rafineri ya da çöplük gibi sabit bir ısı kaynağı olabilir"]);
   if (f.frp != null) rows.push(["Isı gücü (FRP)", f.frp + " MW"]);
   for (const [k, v] of rows) box.appendChild(el("div", k + ": " + v));
   return box;
@@ -187,24 +188,30 @@ function render(data) {
     radius: radiusKm * 1000, color: "#2563eb", weight: 1, fillOpacity: 0.04, interactive: false,
   }).addTo(layer);
 
-  const all = data.fires.concat(data.low_confidence).sort((a, b) => a.distance_km - b.distance_km);
+  const recurring = (data.recurring_sources || []).map((f) => ({ ...f, recurring: true }));
+  const all = data.fires.concat(data.low_confidence, recurring).sort((a, b) => a.distance_km - b.distance_km);
   for (const f of all) {
     const low = f.confidence_level === "low";
+    // Hollow rings are weaker evidence: low confidence, or a spot that detects almost every day (a factory or flare).
+    const hollow = low || f.recurring;
     L.circleMarker([f.latitude, f.longitude], {
-      radius: 7, color: CONF_COLOR[f.confidence_level] || "#444", weight: low ? 2 : 1,
-      fillColor: CONF_COLOR[f.confidence_level] || "#444", fillOpacity: low ? 0.1 : 0.75,
+      radius: 7, color: f.recurring ? "#6b7280" : CONF_COLOR[f.confidence_level] || "#444", weight: hollow ? 2 : 1,
+      dashArray: f.recurring ? "3 3" : null,
+      fillColor: CONF_COLOR[f.confidence_level] || "#444", fillOpacity: hollow ? 0.1 : 0.75,
     }).bindPopup(popupFor(f)).addTo(layer);
   }
 
   const hours = data.query.since_hours;
   $("summary").textContent = data.count + " uydu tespiti (son " + hours + " saat, " + radiusKm + " km çevresinde)"
-    + (data.low_confidence.length ? " · " + data.low_confidence.length + " tanesi düşük güvenli" : "");
+    + (data.low_confidence.length ? " · " + data.low_confidence.length + " tanesi düşük güvenli" : "")
+    + (recurring.length ? " · " + recurring.length + " tanesi sabit kaynak olabilir" : "");
   const notice = $("notice");
   if (data.count === 0) {
     notice.textContent = "Bu alanda seçili sürede uydu tespiti yok. Bu, yangın olmadığı anlamına gelmez: "
       + "uydular her an gözlem yapmaz ve bazı yangınları göremeyebilir.";
   } else {
-    notice.textContent = "Noktalar uydunun gözlem anını gösterir. Düşük güvenli tespitler içi boş çemberle gösterilir.";
+    notice.textContent = "Noktalar uydunun gözlem anını gösterir. Düşük güvenli tespitler içi boş çemberle, neredeyse her gün tespit veren "
+      + "yerler (fabrika, rafineri, çöplük gibi olası sabit ısı kaynakları) kesikli gri çemberle gösterilir; silinmez.";
   }
 
   const body = $("list").querySelector("tbody");
@@ -215,7 +222,8 @@ function render(data) {
     tr.appendChild(el("td", fmt.format(new Date(f.acquired_at)) + " (" + ago(f.age_minutes) + ")"));
     const conf = el("td");
     conf.appendChild(el("span", "", "conf " + f.confidence_level));
-    conf.appendChild(document.createTextNode(CONF_LABEL[f.confidence_level] || f.confidence_level));
+    conf.appendChild(document.createTextNode((CONF_LABEL[f.confidence_level] || f.confidence_level)
+      + (f.recurring ? " · sabit kaynak olabilir" : "")));
     tr.appendChild(conf);
     tr.appendChild(el("td", satelliteName(f)));
     body.appendChild(tr);

@@ -18,9 +18,8 @@ from dataclasses import dataclass
 from datetime import date
 
 from kivilcim.districts import INSIDE_TURKEY_KM, nearest_place
+from kivilcim.fixed import MIN_HISTORY_DAYS, RECURRING_SHARE, cell_of, find_fixed_cells
 from kivilcim.geo import haversine_km
-
-CELL_DEGREES = 0.1
 
 # Provisional thresholds, chosen from a scan of June to November 2026 (see PLAN.md). The count and
 # the summed heat power grow with the number of satellites that see a fire, so they are set per
@@ -30,10 +29,6 @@ MIN_DETECTIONS = 15 * SATELLITES
 MIN_TOTAL_FRP = 500.0 * SATELLITES  # MW, summed over the event's detections
 MIN_MAX_FRP = 100.0  # MW, one detection this strong seeds an event (does not depend on the count)
 MAX_DAYS = 14
-# A cell that detects on at least this share of all days with data is a fixed source. The rule
-# needs enough history to mean anything, so it is skipped for short data sets.
-RECURRING_SHARE = 0.25
-MIN_HISTORY_DAYS = 60
 
 # Seeds this close in space (cells) and time (days) belong to the same event.
 LINK_CELLS = 2
@@ -89,12 +84,8 @@ class _Components:
             self.parent[rb] = ra
 
 
-def _cell(value: float) -> int:
-    return round(value / CELL_DEGREES)
-
-
 def _node(d) -> tuple[int, int, int]:
-    return _cell(d.latitude), _cell(d.longitude), d.acquired_at.date().toordinal()
+    return (*cell_of(d.latitude, d.longitude), d.acquired_at.date().toordinal())
 
 
 def find_events(
@@ -109,13 +100,10 @@ def find_events(
     """Events, most recent first. Low-confidence detections are ignored."""
     rows = [d for d in detections if d.confidence_level != "low"]
 
-    history_days = {d.acquired_at.date() for d in rows}
-    if len(history_days) >= min_history_days:
-        days_by_cell = defaultdict(set)
-        for d in rows:
-            days_by_cell[_node(d)[:2]].add(d.acquired_at.date())
-        fixed = {c for c, ds in days_by_cell.items() if len(ds) >= recurring_share * len(history_days)}
-        rows = [d for d in rows if _node(d)[:2] not in fixed]
+    fixed = find_fixed_cells(
+        ((d.latitude, d.longitude, d.acquired_at.date()) for d in rows), recurring_share, min_history_days
+    )
+    rows = [d for d in rows if cell_of(d.latitude, d.longitude) not in fixed]
 
     # 1. Strong detections become seeds and are linked into groups.
     seed_nodes = {_node(d) for d in rows if (d.frp or 0.0) >= min_max_frp}
@@ -171,7 +159,7 @@ def find_events(
 
         events.append(
             Event(
-                id=f"{days[0]:%Y%m%d}-{_cell(strongest.latitude)}_{_cell(strongest.longitude)}",
+                id="{:%Y%m%d}-{}_{}".format(days[0], *cell_of(strongest.latitude, strongest.longitude)),
                 start=days[0],
                 end=days[-1],
                 peak_day=peak_day,

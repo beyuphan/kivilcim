@@ -402,6 +402,65 @@ def test_low_confidence_is_listed_separately(client, session_factory):
     assert body["count"] == 2
 
 
+def add_daily_history(session_factory, lat, lon, days=80, until_hours_ago=2.0):
+    """A heat source that shows up once a day for `days` days, ending shortly before NOW."""
+    with session_factory() as s:
+        for n in range(days):
+            when = NOW - timedelta(hours=until_hours_ago) - timedelta(days=n)
+            s.add(
+                FireDetection(
+                    source="VIIRS_SNPP_NRT", satellite="N", instrument="VIIRS", latitude=lat, longitude=lon,
+                    acquired_at=when, confidence_raw="n", confidence_level="nominal",
+                    brightness=330.0, frp=6.0, ingested_at=NOW,
+                )
+            )
+        s.commit()
+
+
+def test_a_detection_in_an_always_on_cell_is_listed_as_a_recurring_source(client, session_factory):
+    add_daily_history(session_factory, 36.70, 36.20)  # a steelworks, say
+    add_fire(session_factory, 36.71, 36.21, hours_ago=1, level="high", raw="h")  # a new reading there
+    add_fire(session_factory, 36.72, 36.40, hours_ago=1)  # a reading in a different, quiet cell
+    body = get_fires(client, lat=36.7, lon=36.3, radius_km=50, since_hours=6).json()
+
+    assert [f["longitude"] for f in body["fires"]] == [36.40]
+    assert {f["longitude"] for f in body["recurring_sources"]} == {36.20, 36.21}
+    assert body["low_confidence"] == []
+    assert body["count"] == 3  # nothing is dropped: the recurring ones still count
+
+
+def test_recurring_sources_are_not_flagged_without_enough_history(client, session_factory):
+    add_daily_history(session_factory, 36.70, 36.20, days=30)  # under 60 days of history
+    body = get_fires(client, lat=36.7, lon=36.2, radius_km=50, since_hours=6).json()
+    assert body["recurring_sources"] == []
+    assert len(body["fires"]) == 1
+
+
+def test_low_confidence_stays_in_its_own_list_even_in_a_recurring_cell(client, session_factory):
+    add_daily_history(session_factory, 36.70, 36.20)
+    add_fire(session_factory, 36.71, 36.21, hours_ago=1, level="low", raw="l")
+    body = get_fires(client, lat=36.7, lon=36.2, radius_km=50, since_hours=6).json()
+    assert [f["confidence_level"] for f in body["low_confidence"]] == ["low"]
+    assert all(f["confidence_level"] != "low" for f in body["recurring_sources"])
+
+
+def test_fixed_cells_are_cached_until_new_data_arrives(session_factory, monkeypatch):
+    import kivilcim.api as api_module
+
+    calls = []
+    real = api_module.find_fixed_cells
+    monkeypatch.setattr(api_module, "find_fixed_cells", lambda pts: calls.append(1) or real(pts))
+    client = TestClient(create_app(session_factory, now=lambda: NOW))
+    add_daily_history(session_factory, 36.70, 36.20)
+
+    get_fires(client, lat=36.7, lon=36.2)
+    get_fires(client, lat=36.7, lon=36.2)
+    assert len(calls) == 1
+    add_fire(session_factory, 36.71, 36.21, hours_ago=1)
+    get_fires(client, lat=36.7, lon=36.2)
+    assert len(calls) == 2
+
+
 def test_fires_with_no_detections_is_an_honest_empty_answer(client):
     body = get_fires(client).json()
     assert body["count"] == 0

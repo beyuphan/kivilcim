@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from kivilcim.config import Settings, get_settings
 from kivilcim.db import init_db, make_engine, make_session_factory
 from kivilcim.events import Event, find_events
+from kivilcim.fixed import cell_of, find_fixed_cells
 from kivilcim.geo import bounding_box, haversine_km
 from kivilcim.models import FireDetection, IngestRun, WeatherSnapshot
 from kivilcim.risk import compute_risk
@@ -98,6 +99,9 @@ class FiresResponse(BaseModel):
     count: int
     fires: list[FireOut]  # nominal and high confidence
     low_confidence: list[FireOut]  # shown separately, never mixed in
+    # Detections in a cell that detects on a large share of all days: a factory, refinery, flare
+    # or landfill is likely. Flagged and listed apart, never dropped.
+    recurring_sources: list[FireOut]
     data_as_of: DataAsOf
     disclaimer: str
 
@@ -403,11 +407,17 @@ def create_app(
                 )
         found.sort(key=lambda f: f.distance_km)
 
+        fixed = fixed_cells(session)
+
+        def is_fixed(f: FireOut) -> bool:
+            return cell_of(f.latitude, f.longitude) in fixed
+
         return FiresResponse(
             query=FiresQuery(lat=lat, lon=lon, radius_km=radius_km, since_hours=since_hours),
             count=len(found),
-            fires=[f for f in found if f.confidence_level != "low"],
+            fires=[f for f in found if f.confidence_level != "low" and not is_fixed(f)],
             low_confidence=[f for f in found if f.confidence_level == "low"],
+            recurring_sources=[f for f in found if f.confidence_level != "low" and is_fixed(f)],
             data_as_of=data_as_of(session, current),
             disclaimer=DISCLAIMER,
         )
@@ -448,6 +458,24 @@ def create_app(
             attribution=ATTRIBUTION,
             disclaimer=DISCLAIMER,
         )
+
+    fixed_lock = threading.Lock()
+    fixed_cache: dict = {"key": None, "cells": set()}
+
+    def fixed_cells(session: Session) -> set:
+        """Cells that look like fixed heat sources, found from the VIIRS history. Cached until a new
+        detection is stored (see all_events for why a count and max id are a safe key)."""
+        condition = (FireDetection.instrument == "VIIRS", FireDetection.confidence_level != "low")
+        key = tuple(session.execute(select(func.count(FireDetection.id), func.max(FireDetection.id)).where(*condition)).one())
+        with fixed_lock:
+            if fixed_cache["key"] != key:
+                rows = session.execute(
+                    select(FireDetection.latitude, FireDetection.longitude, FireDetection.acquired_at).where(*condition)
+                ).all()
+                fixed_cache.update(
+                    key=key, cells=find_fixed_cells((lat, lon, when.date()) for lat, lon, when in rows)
+                )
+            return fixed_cache["cells"]
 
     events_lock = threading.Lock()
     events_cache: dict = {"key": None, "events": []}
